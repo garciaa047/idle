@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- viewport-fit=cover + safe-area CSS so the notch / home indicator never clips UI.
+       maximum-scale + user-scalable=no kill double-tap-zoom & pinch (tap-heavy game). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+  <title>Aeon Forge</title>
+  <meta name="description" content="An offline-first incremental game of cosmic-scale automation." />
+
+  <!-- PWA manifest + theming (relative href so it works from any deploy subpath) -->
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0e1a" />
+
+  <!-- iOS standalone install meta. iOS uses a PNG apple-touch-icon. -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Aeon Forge" />
+  <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <header id="app-header">
+    <h1>AEON FORGE</h1>
+    <button id="settings-toggle" aria-label="Settings">⚙</button>
+  </header>
+
+  <main id="app">
+    <section id="resources" class="card-group" aria-label="Resources"></section>
+    <section id="generators" class="card-group" aria-label="Generators"></section>
+  </main>
+
+  <!-- Settings / save panel -->
+  <aside id="settings-panel">
+    <h2>Save &amp; Settings</h2>
+    <p class="hint">Add to Home Screen via the Share menu to install.</p>
+    <textarea id="io-text" placeholder="Exported save appears here; paste a save here to import." spellcheck="false"></textarea>
+    <div class="btn-row">
+      <button data-export>Export</button>
+      <button data-import>Import</button>
+      <button data-reset class="danger">Hard Reset</button>
+    </div>
+  </aside>
+
+  <!-- Offline-gains modal -->
+  <div id="offline-modal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h2>Welcome back</h2>
+      <div id="offline-body"></div>
+      <button data-close-offline class="primary">Collect</button>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

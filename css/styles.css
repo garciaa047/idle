@@ -1,0 +1,253 @@
+/* styles.css — minimal clean dark-cosmic placeholder. Real polish is Phase 8. */
+
+:root {
+  --bg: #0a0e1a;
+  --bg-card: #141a2e;
+  --bg-card-hi: #1d2742;
+  --accent: #5b8cff;
+  --accent-2: #b06bff;
+  --text: #e6ecff;
+  --text-dim: #8a93b5;
+  --danger: #ff5b6b;
+  --ok: #4be08a;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: radial-gradient(1200px 800px at 50% -10%, #16203c 0%, var(--bg) 60%);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* Safe-area insets so nothing hides under the notch / home indicator. */
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  /* Tap-heavy game: kill text selection, tap highlight, and bounce. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+#app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 8px;
+}
+
+#app-header h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+#settings-toggle {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid #2a3554;
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+#app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 8px 14px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.card-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* --- Resource readout --- */
+.resource {
+  background: var(--bg-card);
+  border: 1px solid #232d4a;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  text-align: center;
+}
+.resource-name {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.resource-amount {
+  font-size: 2.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 2px;
+}
+.resource-rate {
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Generator row --- */
+.generator {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid #232d4a;
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.gen-name { font-size: 1.05rem; font-weight: 600; }
+.gen-meta { color: var(--text-dim); font-size: 0.85rem; margin-top: 4px; }
+.gen-meta [data-owned] { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.gen-buy {
+  min-width: 110px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--accent), #3f6ad8);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 10px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.gen-buy:disabled {
+  background: #20283f;
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+.gen-cost { font-size: 0.95rem; }
+
+/* --- Settings panel --- */
+#settings-panel {
+  position: fixed;
+  top: 0; right: 0;
+  height: 100%;
+  width: min(360px, 88vw);
+  background: var(--bg-card-hi);
+  border-left: 1px solid #2a3554;
+  padding: calc(20px + env(safe-area-inset-top)) 20px 20px;
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+  z-index: 20;
+  overflow-y: auto;
+}
+#settings-panel.open { transform: translateX(0); }
+#settings-panel h2 { margin-top: 0; font-size: 1.1rem; }
+#settings-panel .hint { color: var(--text-dim); font-size: 0.85rem; }
+#io-text {
+  width: 100%;
+  height: 120px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid #2a3554;
+  border-radius: 8px;
+  padding: 10px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.btn-row button {
+  flex: 1 1 auto;
+  padding: 10px 12px;
+  border: 1px solid #2a3554;
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-row .danger { border-color: #5a2230; color: var(--danger); }
+
+/* --- Offline modal --- */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 7, 16, 0.7);
+  z-index: 30;
+  padding: 20px;
+}
+.modal.open { display: flex; }
+.modal-card {
+  background: var(--bg-card-hi);
+  border: 1px solid #2a3554;
+  border-radius: var(--radius);
+  padding: 22px;
+  width: min(420px, 100%);
+  text-align: center;
+}
+.modal-card h2 { margin-top: 0; }
+.gains { margin: 12px 0; }
+.gain-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #232d4a;
+  font-variant-numeric: tabular-nums;
+}
+.gain-row span:last-child { color: var(--ok); }
+.modal-card .note { color: var(--text-dim); font-size: 0.8rem; }
+.modal-card .primary, .modal-card.primary {
+  margin-top: 8px;
+}
+button.primary {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 26px;
+  background: linear-gradient(180deg, var(--accent), #3f6ad8);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* --- Toast --- */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 20px);
+  background: #1d2742;
+  border: 1px solid #2a3554;
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 40;
+  max-width: 90vw;
+  text-align: center;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }

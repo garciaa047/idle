@@ -1,0 +1,26 @@
+# --- Claude Code local files (machine-specific, not part of the app) ---
+.claude/settings.local.json
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Logs & temp ---
+*.log
+*.tmp
+tmp/
+_verify.mjs
+
+# --- Dev tooling that may appear later (not used at runtime) ---
+node_modules/
+.cache/
+dist/
