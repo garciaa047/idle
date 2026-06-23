@@ -1,6 +1,6 @@
 # AEON FORGE
 
-An offline-first incremental/idle game of cosmic-scale automation, shipped as a **Progressive Web App** — vanilla HTML/CSS/JS, no build step, no runtime network dependency. This is **Phase 0**: the engine scaffold + PWA plumbing, proven end-to-end with a single placeholder resource (Energy) and generator (Collector). Game mechanics arrive in later phases.
+An offline-first incremental/idle game of cosmic-scale automation, shipped as a **Progressive Web App** — vanilla HTML/CSS/JS, no build step, no runtime network dependency. **Phase 1** delivers the **Scale 1 ("Quantum Foam")** core loop on top of the Phase 0 engine: a Reactor → Extractor → Fabricator production chain (with input-throttled efficiency), a stackable multiplier system, the **Overclock** active surge, and the **Collapse** prestige that mints **Singularity (σ)** to spend in a persistent upgrade shop.
 
 ## Run locally (Windows)
 
@@ -50,7 +50,7 @@ The service worker serves the app **cache-first**, so a deploy alone will **not*
 
 On the next launch the new service worker installs the fresh shell, deletes the old cache, and `skipWaiting()` + `clients.claim()` activate it promptly.
 
-## Architecture (Phase 0)
+## Architecture
 
 - **State / content split.** `state` (`js/engine/state.js`) is the entire save: a plain serializable object of amounts, owned counts, timestamps, settings, flags, and `version`. `content` (`js/content/*`) holds static definitions as data keyed by `id`. **Adding a resource or generator later = adding one data object; the engine never changes.**
 - **One simulation path.** `advance(state, seconds)` (`js/engine/tick.js`) chunks time into fixed sub-steps and runs all math in `stepSimulation(dt)`. It is **composable**: one big call ≈ many small calls. The live `requestAnimationFrame` loop and offline catch-up both call the *same* `advance` — there is no separate offline math path.

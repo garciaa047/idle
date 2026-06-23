@@ -2,7 +2,7 @@
 // framework. Export/Import are the safety net against iOS evicting site storage,
 // so they must be reliable.
 
-import { SAVE_VERSION } from './constants.js';
+import { SAVE_VERSION, SEED_STRUCTURE } from './constants.js';
 import { defaultState } from './state.js';
 
 const STORAGE_KEY = 'aeonforge.save';
@@ -10,10 +10,31 @@ const STORAGE_KEY = 'aeonforge.save';
 // --- Migration framework ----------------------------------------------------
 // MIGRATIONS[v] upgrades a save FROM version v TO version v+1. On load we run
 // them in order until the save reaches SAVE_VERSION, so old saves never break
-// when the schema changes in later phases. Phase 0 has none yet — the framework
-// exists so future schema changes are a matter of adding one function here.
+// when the schema changes in later phases. mergeDefaults() then backfills any
+// fields a migration didn't set explicitly.
 const MIGRATIONS = {
-  // 1: (s) => { /* transform v1 -> v2 */ return s; },
+  // v1 (Phase 0: Energy + placeholder Collector) -> v2 (Phase 1: Scale 1 economy).
+  // Drop the placeholder, introduce Matter/Structure, the three real generators,
+  // σ + σ-upgrades, overclock timers, and the cumulative Collapse counter.
+  // User settings are preserved untouched.
+  1: (s) => {
+    s.resources = s.resources || {};
+    s.resources.matter = s.resources.matter ?? 0;
+    s.resources.structure = s.resources.structure ?? SEED_STRUCTURE;
+
+    // Remove the Phase 0 placeholder; start the real generators at zero.
+    s.generators = { reactor: 0, extractor: 0, fabricator: 0 };
+
+    s.sigma = 0;
+    s.sigmaUpgrades = { fabricationYield: 0, throughput: 0, resonance: 0, collapseYield: 0 };
+    s.structureThisCollapse = 0;
+    s.overclockEndsAt = 0;
+    s.overclockCooldownEndsAt = 0;
+
+    s.settings = s.settings || {};
+    if (s.settings.buyAmount === undefined) s.settings.buyAmount = 1;
+    return s;
+  },
 };
 
 function migrate(state) {
@@ -38,6 +59,7 @@ function mergeDefaults(loaded) {
     ...loaded,
     resources: { ...base.resources, ...(loaded.resources || {}) },
     generators: { ...base.generators, ...(loaded.generators || {}) },
+    sigmaUpgrades: { ...base.sigmaUpgrades, ...(loaded.sigmaUpgrades || {}) },
     settings: { ...base.settings, ...(loaded.settings || {}) },
     flags: { ...base.flags, ...(loaded.flags || {}) },
   };

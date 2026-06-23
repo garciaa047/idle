@@ -10,7 +10,9 @@ import {
 import { advance } from './engine/tick.js';
 import { loadState, saveState, hardReset, exportSave, importSave } from './engine/save.js';
 import { elapsedSeconds, effectiveSeconds } from './engine/offline.js';
-import { costFor, GENERATOR_BY_ID } from './content/generators.js';
+import { GENERATOR_BY_ID, bulkCost, maxAffordable } from './content/generators.js';
+import { triggerOverclock } from './engine/overclock.js';
+import { performCollapse, canCollapse, sigmaGain, buyUpgrade } from './engine/prestige.js';
 import { initRender, render } from './ui/render.js';
 import { initPanels, showOfflineModal } from './ui/panels.js';
 
@@ -25,14 +27,47 @@ if (navigator.storage && navigator.storage.persist) {
 }
 
 // --- Buy logic (mutates state; the single place purchases happen) -----------
+// Honors the ×1 / ×10 / Max toggle: buy up to the chosen count or as many as
+// affordable, whichever is smaller. Closed-form geometric cost — no loop.
 function buy(genId) {
   const gen = GENERATOR_BY_ID[genId];
   if (!gen) return;
   const owned = state.generators[genId] || 0;
-  const cost = costFor(gen, owned);
-  if ((state.resources[gen.costResource] || 0) < cost) return;
-  state.resources[gen.costResource] -= cost;
-  state.generators[genId] = owned + 1;
+  const budget = state.resources[gen.costResource] || 0;
+  const amt = state.settings.buyAmount;
+  const affordable = maxAffordable(gen, owned, budget);
+  const count = amt === 'max' ? affordable : Math.min(amt, affordable);
+  if (count <= 0) return;
+  state.resources[gen.costResource] -= bulkCost(gen, owned, count);
+  state.generators[genId] = owned + count;
+}
+
+function setBuyAmount(amt) {
+  state.settings.buyAmount = amt;
+}
+
+function overclock() {
+  if (triggerOverclock(state)) beat('overclock');
+}
+
+function collapse() {
+  if (!canCollapse(state)) return;
+  const gain = sigmaGain(state);
+  if (!confirm(`Collapse now for ${gain} σ?\n\nThis resets your production (Energy, Matter, Structure, generators) to the Scale seed. σ and σ-upgrades are kept.`)) return;
+  performCollapse(state);
+  state.flags.sawSigma = true; // reveal the σ-shop from here on
+  beat('collapse');
+  saveState(state);
+}
+
+function buySigmaUpgrade(upId) {
+  if (buyUpgrade(state, upId)) state.flags.sawSigma = true;
+}
+
+// Lightweight visual beat (CSS flash); real juice is Phase 8.
+function beat(kind) {
+  root.classList.add(`beat-${kind}`);
+  setTimeout(() => root.classList.remove(`beat-${kind}`), 450);
 }
 
 // --- Offline catch-up: reuse the SAME advance() as the live loop ------------
@@ -56,7 +91,13 @@ function applyOffline() {
 }
 
 // --- UI wiring --------------------------------------------------------------
-initRender(root, { onBuy: buy });
+initRender(root, {
+  onBuy: buy,
+  onSetBuyAmount: setBuyAmount,
+  onOverclock: overclock,
+  onCollapse: collapse,
+  onBuyUpgrade: buySigmaUpgrade,
+});
 initPanels(root, {
   onExport: () => exportSave(state),
   onImport: (text) => {

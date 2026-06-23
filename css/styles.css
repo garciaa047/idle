@@ -251,3 +251,156 @@ button.primary {
   text-align: center;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* --- Utility --- */
+.hidden { display: none !important; }
+
+/* --- Overclock button --- */
+#overclock-section { margin-top: -6px; }
+.overclock {
+  width: 100%;
+  border: 1px solid #6a4bd0;
+  border-radius: var(--radius);
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(180deg, var(--accent-2), #7a3fd0);
+  font-variant-numeric: tabular-nums;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.overclock:active { transform: scale(0.99); }
+.overclock.active {
+  background: linear-gradient(180deg, #ffb24b, #ff7a3f);
+  border-color: #ff9a4b;
+  box-shadow: 0 0 18px rgba(255, 150, 60, 0.5);
+}
+.overclock.cooldown, .overclock:disabled {
+  background: #20283f;
+  color: var(--text-dim);
+  border-color: #2a3554;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* --- Buy-amount toggle --- */
+.buy-toggle { display: flex; gap: 8px; }
+.buy-amt {
+  flex: 1 1 0;
+  padding: 9px 0;
+  border: 1px solid #2a3554;
+  border-radius: 9px;
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.buy-amt.active {
+  background: linear-gradient(180deg, var(--accent), #3f6ad8);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* --- Generator throttle line (Fabricator) --- */
+.gen-throttle {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.gen-throttle.starved { color: var(--danger); }
+.gen-buy .buy-label { font-size: 0.78rem; opacity: 0.9; }
+
+/* --- Panels (Collapse, Singularity shop) --- */
+.panel {
+  background: var(--bg-card);
+  border: 1px solid #232d4a;
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.panel-head { display: flex; align-items: center; justify-content: space-between; }
+.panel-head h2 { margin: 0; font-size: 1.05rem; }
+.panel-desc { color: var(--text-dim); font-size: 0.85rem; margin: 8px 0 14px; }
+
+.collapse-stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #232d4a;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.collapse-stat .sigma-gain { color: var(--accent-2); font-weight: 700; }
+.collapse-btn {
+  width: 100%;
+  margin-top: 14px;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(180deg, var(--accent-2), #7a3fd0);
+}
+.collapse-btn:disabled {
+  background: #20283f;
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+.collapse-hint {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 1em;
+}
+
+/* --- Singularity shop --- */
+.sigma-balance {
+  color: var(--accent-2);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+#sigma-upgrades { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.upgrade {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg);
+  border: 1px solid #232d4a;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.upg-name { font-weight: 600; font-size: 0.95rem; }
+.upg-level { color: var(--text-dim); font-size: 0.8rem; font-weight: 400; }
+.upg-effect { color: var(--text-dim); font-size: 0.8rem; margin-top: 3px; }
+.upg-buy {
+  min-width: 84px;
+  border: 1px solid #4a3a7a;
+  border-radius: 9px;
+  background: var(--bg-card-hi);
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.upg-buy:disabled { color: var(--text-dim); border-color: #2a3554; cursor: not-allowed; }
+
+/* --- Lightweight beats (Phase 8 gets real juice) --- */
+@keyframes flash-collapse {
+  0% { box-shadow: inset 0 0 0 2000px rgba(176, 107, 255, 0.18); }
+  100% { box-shadow: inset 0 0 0 2000px rgba(176, 107, 255, 0); }
+}
+@keyframes flash-overclock {
+  0% { box-shadow: inset 0 0 0 2000px rgba(255, 150, 60, 0.16); }
+  100% { box-shadow: inset 0 0 0 2000px rgba(255, 150, 60, 0); }
+}
+body.beat-collapse { animation: flash-collapse 0.45s ease-out; }
+body.beat-overclock { animation: flash-overclock 0.45s ease-out; }

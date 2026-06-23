@@ -10,6 +10,17 @@ export const RESOURCES = [
     name: 'Energy',
     symbol: 'E',
   },
+  {
+    id: 'matter',
+    name: 'Matter',
+    symbol: 'M',
+  },
+  {
+    // Structure is the run score AND the currency every generator is bought with.
+    id: 'structure',
+    name: 'Structure',
+    symbol: 'S',
+  },
 ];
 
 // Convenience lookup by id.

@@ -3,6 +3,7 @@
 // by main.js, and never touches the simulation directly.
 
 import { format } from '../engine/format.js';
+import { RESOURCE_BY_ID } from '../content/resources.js';
 
 function formatDuration(seconds) {
   const s = Math.floor(seconds);
@@ -22,12 +23,16 @@ export function showOfflineModal(root, { awaySeconds, gains, saturatedNote }) {
 
   const lines = Object.entries(gains)
     .filter(([, v]) => v > 0)
-    .map(([id, v]) => `<div class="gain-row"><span>${id}</span><span>+${format(v)}</span></div>`)
+    .map(([id, v]) => {
+      const name = RESOURCE_BY_ID[id] ? RESOURCE_BY_ID[id].name : id;
+      return `<div class="gain-row"><span>${name}</span><span>+${format(v)}</span></div>`;
+    })
     .join('');
 
   body.innerHTML = `
     <p>You were away for <strong>${formatDuration(awaySeconds)}</strong>.</p>
     <div class="gains">${lines || '<div class="gain-row">No gains.</div>'}</div>
+    <p class="note">Offline Structure counts toward your next Collapse.</p>
     <p class="note">${saturatedNote}</p>`;
 
   modal.classList.add('open');
