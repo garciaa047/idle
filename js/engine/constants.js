@@ -21,7 +21,7 @@ export const OFFLINE_MIN_SECONDS = 30; // only show the offline modal past this 
 
 // --- Scale 1 ("Quantum Foam") economy ---------------------------------------
 // Bootstrap seed: enough Structure to buy the first Reactor + Extractor + Fabricator.
-export const SEED_STRUCTURE = 35;
+export const SEED_STRUCTURE = 350;
 
 // Reactor — produces Energy.
 export const REACTOR_BASE_COST = 10;     // Structure
