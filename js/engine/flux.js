@@ -13,7 +13,8 @@ import {
   CONVERGENCE_COST, CONVERGENCE_SECONDS,
   SINGULARITY_FOCUS_COST,
 } from './constants.js';
-import { GENERATORS, isActive } from '../content/generators.js';
+import { isActive } from '../content/generators.js';
+import { generatorsOf } from '../content/scales.js';
 
 // Clamp every Flux mutation into [0, FLUX_CAP] — the single place flux changes size.
 export function addFlux(state, amount) {
@@ -55,7 +56,7 @@ export function triggerConvergence(state) {
   if (!canConvergence(state)) return false;
   state.flux -= CONVERGENCE_COST;
   const depth = state.unlockedDepth || 0;
-  for (const gen of GENERATORS) {
+  for (const gen of generatorsOf(state)) {
     if (!gen.consumes) continue;
     if (!isActive(gen, depth)) continue;
     for (const res in gen.consumes) {

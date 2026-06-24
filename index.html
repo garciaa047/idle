@@ -30,6 +30,12 @@
   </header>
 
   <main id="app">
+    <!-- Current-Scale banner (re-themed per Scale) -->
+    <div id="scale-banner">
+      <span class="scale-eyebrow">Scale <span data-scale-num>1</span></span>
+      <span class="scale-name" data-scale-name>Quantum Foam</span>
+    </div>
+
     <section id="resources" class="card-group" aria-label="Resources"></section>
 
     <!-- Overclock active surge -->
@@ -52,6 +58,23 @@
 
     <section id="generators" class="card-group" aria-label="Generators"></section>
 
+    <!-- Automator panel (revealed after first Ascend) -->
+    <section id="automator-panel" class="panel hidden" aria-label="Automator">
+      <div class="panel-head">
+        <h2>Automator</h2>
+        <button class="auto-master" data-auto-master>Off</button>
+      </div>
+      <p class="panel-desc">Auto-buys this Scale's generators so you can focus on the frontier.</p>
+      <div id="auto-gens"></div>
+      <div class="auto-row auto-reserve">
+        <label>Reserve <span data-reserve-val>0</span>% of Structure</label>
+        <input type="range" min="0" max="90" step="5" value="0" data-reserve />
+      </div>
+      <label class="auto-row auto-cheapest hidden" data-cheapest-row>
+        <input type="checkbox" data-cheapest /> Buy cheapest first
+      </label>
+    </section>
+
     <!-- Collapse (prestige) panel -->
     <section id="collapse-panel" class="panel" aria-label="Collapse"></section>
 
@@ -63,10 +86,38 @@
       </div>
       <div id="sigma-upgrades"></div>
     </section>
+
+    <!-- Ascend panel (revealed when the gate is met) -->
+    <section id="ascend-panel" class="panel hidden" aria-label="Ascend">
+      <div class="panel-head"><h2>Ascend</h2></div>
+      <p class="panel-desc">Leave this Scale behind to mint permanent <strong>Aeons (Æ)</strong>.
+        σ and this Scale's upgrades are wiped — but Aeons, the Aeon shop, and the Automator carry forever.</p>
+      <div class="collapse-stat">Next Scale <span data-next-scale>—</span></div>
+      <div class="collapse-stat">Æ on Ascend <span class="aeon-gain" data-aeongain>0</span></div>
+      <button class="ascend-btn" data-ascend>Ascend</button>
+      <div class="collapse-hint" data-ascendhint></div>
+    </section>
+
+    <!-- Aeon shop (revealed once the Ascend gate has ever been met / Æ earned) -->
+    <section id="aeon-shop" class="panel hidden" aria-label="Aeon Shop">
+      <div class="panel-head">
+        <h2>Aeon Shop</h2>
+        <div class="aeon-balance">Æ <span data-aeon>0</span></div>
+      </div>
+      <p class="panel-desc">Permanent, cross-Scale upgrades. This grows into a deeper meta-tree later.</p>
+      <div id="aeon-upgrades"></div>
+    </section>
+
+    <!-- Scale roadmap (long-term goals) -->
+    <section id="scale-roadmap" class="panel" aria-label="Scale roadmap">
+      <div class="panel-head"><h2>Scales</h2></div>
+      <div id="roadmap-list"></div>
+    </section>
   </main>
 
   <!-- Settings / save panel -->
   <aside id="settings-panel">
+    <button id="settings-close" data-close-settings aria-label="Close settings">✕</button>
     <h2>Save &amp; Settings</h2>
     <p class="hint">Add to Home Screen via the Share menu to install.</p>
     <textarea id="io-text" placeholder="Exported save appears here; paste a save here to import." spellcheck="false"></textarea>
@@ -93,6 +144,9 @@
   </div>
 
   <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Build/version badge (shows the active CACHE_VERSION) -->
+  <div id="version-badge" data-version aria-label="Version"></div>
 
   <script type="module" src="./js/main.js"></script>
 </body>

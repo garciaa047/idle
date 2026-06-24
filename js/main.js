@@ -5,7 +5,7 @@ import {
   AUTOSAVE_INTERVAL,
   FRAME_DT_CLAMP,
   OFFLINE_MIN_SECONDS,
-  T_CAP,
+  AUTOMATOR_INTERVAL,
   FLUX_GAIN_OVERCLOCK,
   SURGE_MULT,
   SURGE_DURATION,
@@ -14,9 +14,13 @@ import { advance, checkUnlocks } from './engine/tick.js';
 import { loadState, saveState, hardReset, exportSave, importSave } from './engine/save.js';
 import { elapsedSeconds, effectiveSeconds } from './engine/offline.js';
 import { format } from './engine/format.js';
-import { GENERATOR_BY_ID, isActive, bulkCost, maxAffordable } from './content/generators.js';
+import { isActive, bulkCost, maxAffordable } from './content/generators.js';
+import { SCALES, scaleOf, generatorById, resourcesOf } from './content/scales.js';
+import { tCapOf } from './content/aeon.js';
 import { triggerOverclock } from './engine/overclock.js';
 import { performCollapse, canCollapse, sigmaGain, buyUpgrade } from './engine/prestige.js';
+import { canAscend, ascendGain, performAscend, buyAeonUpgrade } from './engine/ascend.js';
+import { runAutomator } from './engine/automator.js';
 import {
   addFlux, tickFlux, triggerOverdrive, triggerConvergence, triggerFocus,
 } from './engine/flux.js';
@@ -32,16 +36,13 @@ const root = document.body;
 // --- Boot state -------------------------------------------------------------
 let state = loadState();
 
-// Request persistent storage (best-effort) so iOS is less likely to evict us.
 if (navigator.storage && navigator.storage.persist) {
   navigator.storage.persist().catch(() => {});
 }
 
-// --- Buy logic (mutates state; the single place purchases happen) -----------
-// Honors the ×1 / ×10 / Max toggle: buy up to the chosen count or as many as
-// affordable, whichever is smaller. Closed-form geometric cost — no loop.
+// --- Buy logic (mutates state; the single place MANUAL purchases happen) -----
 function buy(genId) {
-  const gen = GENERATOR_BY_ID[genId];
+  const gen = generatorById(state, genId);
   if (!gen) return;
   if (!isActive(gen, state.unlockedDepth || 0)) return; // a locked tier isn't purchasable
   const owned = state.generators[genId] || 0;
@@ -54,11 +55,8 @@ function buy(genId) {
   state.generators[genId] = owned + count;
 }
 
-function setBuyAmount(amt) {
-  state.settings.buyAmount = amt;
-}
+function setBuyAmount(amt) { state.settings.buyAmount = amt; }
 
-// Overclock tap also feeds Flux (active play -> Flux -> strategic abilities).
 function overclock() {
   if (triggerOverclock(state)) {
     addFlux(state, FLUX_GAIN_OVERCLOCK);
@@ -67,31 +65,43 @@ function overclock() {
 }
 
 // --- Flux abilities ---------------------------------------------------------
-function overdrive() {
-  if (triggerOverdrive(state)) { beat('overclock'); showToast(root, 'Overdrive engaged.'); }
-}
-function convergence() {
-  if (triggerConvergence(state)) showToast(root, 'Factory converged — intermediate stocks topped up.');
-}
-function focus() {
-  if (triggerFocus(state)) showToast(root, 'Singularity Focus armed for your next Collapse.');
-}
+function overdrive() { if (triggerOverdrive(state)) { beat('overclock'); showToast(root, 'Overdrive engaged.'); } }
+function convergence() { if (triggerConvergence(state)) showToast(root, 'Factory converged — intermediate stocks topped up.'); }
+function focus() { if (triggerFocus(state)) showToast(root, 'Singularity Focus armed for your next Collapse.'); }
 
 function collapse() {
   if (!canCollapse(state)) return;
   const gain = sigmaGain(state);
   if (!confirm(`Collapse now for ${gain} σ?\n\nThis resets your production (resources + generators) to the Scale seed. σ, σ-upgrades, your unlocked tiers, and Flux are kept.`)) return;
   performCollapse(state);
-  state.flags.sawSigma = true; // reveal the σ-shop (and the Flux panel) from here on
+  state.flags.sawSigma = true;
   beat('collapse');
   saveState(state);
 }
 
-function buySigmaUpgrade(upId) {
-  if (buyUpgrade(state, upId)) state.flags.sawSigma = true;
+function buySigmaUpgrade(upId) { if (buyUpgrade(state, upId)) state.flags.sawSigma = true; }
+
+// --- Ascend + Aeon shop -----------------------------------------------------
+function ascend() {
+  if (!canAscend(state)) return;
+  const gain = ascendGain(state);
+  const next = SCALES[state.currentScale]; // index = currentScale -> the NEXT Scale def
+  if (!confirm(`Ascend to ${next.name} for ${gain} Æ?\n\nσ and this Scale's upgrades are WIPED. Aeons, the Aeon shop, the Automator, and Flux are permanent — and the next Scale ramps faster.`)) return;
+  performAscend(state);
+  beat('collapse');
+  showNotice(root, `Ascended — ${scaleOf(state).name}`, 'A new Scale, re-themed. Your Aeon upgrades and Automator carried over; spend Æ to power up.');
+  saveState(state);
 }
 
-// --- Resonance catch: roll + apply the weighted reward, then reschedule ------
+function buyAeon(id) { buyAeonUpgrade(state, id); }
+
+// --- Automator settings -----------------------------------------------------
+function autoMaster() { state.automator.master = !state.automator.master; }
+function autoGen(id) { state.automator.perGen[id] = !state.automator.perGen[id]; }
+function autoReserve(pct) { state.automator.reservePct = Math.max(0, Math.min(90, pct || 0)); }
+function autoCheapest(on) { state.automator.buyCheapest = !!on; }
+
+// --- Resonance catch --------------------------------------------------------
 function catchResonance() {
   const kind = pickReward();
   const res = applyReward(state, kind);
@@ -99,42 +109,49 @@ function catchResonance() {
   else if (kind === 'cache') showToast(root, `Cache! +${format(res.amount)} Structure.`);
   else showToast(root, `Flux burst! +${res.amount} ⚡`);
   beat('overclock');
-  scheduleResonance(state); // queue the next spawn
+  scheduleResonance(state);
 }
 
-// Lightweight visual beat (CSS flash); real juice is Phase 8.
 function beat(kind) {
   root.classList.add(`beat-${kind}`);
   setTimeout(() => root.classList.remove(`beat-${kind}`), 450);
 }
 
-// Fire a "New tier unlocked" notice for each newly-crossed chain threshold.
 function notifyUnlocks(list) {
   for (const u of list) showNotice(root, 'New tier unlocked', u.blurb);
 }
 
+// Latch the "Ascension unlocked" moment the first time the gate opens.
+function checkAscendGate() {
+  if (!state.flags.sawAscend && canAscend(state)) {
+    state.flags.sawAscend = true;
+    showNotice(root, 'Ascension unlocked', 'You have mastered this Scale. Ascend to mint permanent Aeons and unlock the Automator.');
+  }
+}
+
 // --- Offline catch-up: reuse the SAME advance() as the live loop ------------
+// The Automator does NOT run offline (offline = production only at departure
+// counts); it resumes in the foreground.
 function applyOffline() {
   const away = elapsedSeconds(state);
   if (away < OFFLINE_MIN_SECONDS) return;
 
-  // Flux drains in real (wall-clock) time while away — never fast-forwarded.
-  tickFlux(state, away, false);
+  tickFlux(state, away, false); // Flux drains in real time while away
 
-  // Snapshot to report gains.
+  const tCap = tCapOf(state);
+  const eff = effectiveSeconds(away, tCap);
   const before = { ...state.resources };
-  advance(state, effectiveSeconds(away));
-  notifyUnlocks(checkUnlocks(state)); // offline production can cross unlock thresholds
+  advance(state, eff);
+  notifyUnlocks(checkUnlocks(state));
 
   const gains = {};
   for (const id of Object.keys(state.resources)) {
     gains[id] = (state.resources[id] || 0) - (before[id] || 0);
   }
-  showOfflineModal(root, {
-    awaySeconds: away,
-    gains,
-    saturatedNote: `Offline production saturates near ${Math.round(T_CAP / 3600)}h away.`,
-  });
+  const names = {};
+  for (const r of resourcesOf(state)) names[r.id] = r.name;
+
+  showOfflineModal(root, { awaySeconds: away, effectiveSeconds: eff, tCap, gains, names });
 }
 
 // --- UI wiring --------------------------------------------------------------
@@ -147,41 +164,44 @@ initRender(root, {
   onFocus: focus,
   onCollapse: collapse,
   onBuyUpgrade: buySigmaUpgrade,
+  onAscend: ascend,
+  onBuyAeon: buyAeon,
+  onAutoMaster: autoMaster,
+  onAutoGen: autoGen,
+  onAutoReserve: autoReserve,
+  onAutoCheapest: autoCheapest,
 });
 initPanels(root, {
   onExport: () => exportSave(state),
-  onImport: (text) => {
-    state = importSave(text);
-    saveState(state);
-  },
-  onReset: () => {
-    state = hardReset();
-    saveState(state);
-  },
+  onImport: (text) => { state = importSave(text); saveState(state); },
+  onReset: () => { state = hardReset(); saveState(state); },
 });
 initResonance(root, { onCatch: catchResonance });
 
 applyOffline();
 
-// --- Live game loop: real delta-time, clamped, fed to advance() -------------
+// --- Live game loop ---------------------------------------------------------
 let lastFrame = performance.now();
+let lastAutomator = 0;
 function frame(now) {
   let dt = (now - lastFrame) / 1000;
   lastFrame = now;
-  // Clamp to absorb tab-lag / background spikes; long gaps are offline, handled above.
   if (dt > FRAME_DT_CLAMP) dt = FRAME_DT_CLAMP;
   if (dt > 0) {
     advance(state, dt);
-    // The rAF loop only runs while the document is visible, so this is the
-    // visible Flux trickle; hidden drain is applied on resume / offline.
-    tickFlux(state, dt, true);
+    tickFlux(state, dt, true); // visible trickle
   }
 
-  // Progressive deepening can trigger live; notify on each new unlock.
   notifyUnlocks(checkUnlocks(state));
+  checkAscendGate();
 
-  // Resonance spawns only while visible. Schedule the first one lazily, then spawn
-  // whenever one is due and none is on screen.
+  // Automator runs a few times/sec in the FOREGROUND only (never offline).
+  if (now - lastAutomator >= AUTOMATOR_INTERVAL * 1000) {
+    lastAutomator = now;
+    runAutomator(state);
+  }
+
+  // Resonance spawns only while visible.
   if (!state.resonanceNextAt) scheduleResonance(state);
   if (resonanceDue(state) && !resonanceActive()) {
     spawnResonance();
@@ -193,21 +213,17 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-// --- Autosave: interval + reliable iOS backgrounding hooks ------------------
+// --- Autosave ---------------------------------------------------------------
 setInterval(() => saveState(state), AUTOSAVE_INTERVAL * 1000);
 
-// visibilitychange->hidden and pagehide are the reliable backgrounding signals
-// on iOS Safari. beforeunload is unreliable on mobile, so we do not depend on it.
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     hiddenAt = Date.now();
     saveState(state);
   } else {
-    // Returning to visible: drain Flux for the time spent hidden, and reset the
-    // frame clock so the first frame's dt isn't a huge spike.
     if (hiddenAt) {
-      tickFlux(state, (Date.now() - hiddenAt) / 1000, false);
+      tickFlux(state, (Date.now() - hiddenAt) / 1000, false); // drain Flux for time hidden
       hiddenAt = 0;
     }
     lastFrame = performance.now();
@@ -215,7 +231,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => saveState(state));
 
-// --- Service worker (relative URL; skip on file://) -------------------------
+// --- Service worker ---------------------------------------------------------
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch((err) => {

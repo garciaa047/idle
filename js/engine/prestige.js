@@ -1,24 +1,25 @@
 // prestige.js — Collapse (the within-Scale soft reset) + the Singularity (σ) shop.
 //
-// THE PRESTIGE DISTINCTION (keep this split clean — later phases nest more resets
-// on top): a Collapse mints σ from cumulative Structure produced, then resets
-// RUN-LEVEL state only (resources, generator counts, the cumulative counter, and
-// active buffs) back to the fresh-Scale seed. σ and σ-upgrade levels (and settings)
-// PERSIST. σ and what it buys carry over; everything below resets.
+// THE PRESTIGE DISTINCTION (keep this split clean — Ascend nests ANOTHER reset on
+// top in ascend.js): a Collapse mints σ from cumulative Structure produced, then
+// resets RUN-LEVEL state only (resources, generator counts, the cumulative counter,
+// active buffs) back to the fresh-Scale seed. σ, σ-upgrade levels, the unlocked
+// chain depth, lifetimeStructure, Flux, and settings PERSIST across a Collapse.
+//
+// SCALE-AGNOSTIC: every definition (resources, ladder, σ params + upgrades) comes
+// from the current Scale via scaleOf(state) — there is no per-Scale branching here.
 
-import { K_SIGMA, S_REF, SEED_STRUCTURE } from './constants.js';
-import { RESOURCES } from '../content/resources.js';
-import { GENERATORS } from '../content/generators.js';
-import { UPGRADE_BY_ID } from '../content/upgrades.js';
+import { SEED_STRUCTURE } from './constants.js';
+import { scaleOf, resourcesOf, generatorsOf, upgradesOf } from '../content/scales.js';
 import { collectContributions, multiplierFor } from './multipliers.js';
 
-// σ = floor( K_SIGMA * sqrt(structureThisCollapse / S_REF) * collapseYieldBonus ).
-// The √ makes prestige sublinear (doubling output does NOT double σ), so WHEN to
-// Collapse is a real optimal-stopping decision. The Collapse Yield σ-upgrade feeds
-// in via the 'sigmaGain' multiplier target (production 'all' never touches it).
+// σ = floor( K_SIGMA * sqrt(structureThisCollapse / S_REF) * sigmaGainBonus ).
+// The √ makes prestige sublinear (doubling output does NOT double σ). The bonus
+// folds in Collapse Yield (σ-shop) AND Singular Insight (Aeon shop) via 'sigmaGain'.
 export function sigmaGain(state, now = Date.now()) {
   const stc = state.structureThisCollapse || 0;
   if (stc <= 0) return 0;
+  const { K_SIGMA, S_REF } = scaleOf(state).sigma;
   const base = K_SIGMA * Math.sqrt(stc / S_REF);
   const bonus = multiplierFor(collectContributions(state, now), 'sigmaGain');
   return Math.floor(base * bonus);
@@ -26,28 +27,30 @@ export function sigmaGain(state, now = Date.now()) {
 
 // Gated until structureThisCollapse >= S_REF (i.e. until it grants at least 1 σ).
 export function canCollapse(state) {
-  return (state.structureThisCollapse || 0) >= S_REF;
+  return (state.structureThisCollapse || 0) >= scaleOf(state).sigma.S_REF;
 }
 
-// Perform the Collapse: grant σ, then reset run-level state. Returns σ granted,
-// or 0 if the gate wasn't met (caller should confirm first).
+// Perform the Collapse: grant σ (and credit sigmaThisScale, which feeds the Ascend
+// Æ payout and is NEVER reduced by spending), then reset run-level state.
 export function performCollapse(state, now = Date.now()) {
   if (!canCollapse(state)) return 0;
   const gain = sigmaGain(state, now);   // includes the Singularity Focus bonus if armed
   state.sigma = (state.sigma || 0) + gain;
+  state.sigmaThisScale = (state.sigmaThisScale || 0) + gain; // cumulative earned this Scale
   state.singularityFocusArmed = false;  // the armed Flux bonus is consumed by this Collapse
   resetRun(state);
   return gain;
 }
 
-// Reset RUN-LEVEL state only. Used by Collapse (and reusable by Ascend in Phase 3).
-// PERSISTS: state.sigma, state.sigmaUpgrades, state.settings, state.flags, AND the
-// Phase 2 cross-Collapse progress — lifetimeStructure, unlockedDepth (chain depth),
-// and flux. Collapse rebuilds the FACTORY, not your unlocked tiers or banked Flux.
+// Reset RUN-LEVEL state only. Used by Collapse (and reused by Ascend in ascend.js,
+// which then additionally wipes the σ/chain/Scale-bound fields). Builds resources
+// and generator slots from the CURRENT Scale's definitions.
+// PERSISTS: sigma, sigmaUpgrades, sigmaThisScale, unlockedDepth, lifetimeStructure,
+// flux, aeons, aeonUpgrades, settings, flags.
 export function resetRun(state) {
-  for (const r of RESOURCES) state.resources[r.id] = 0;
+  for (const r of resourcesOf(state)) state.resources[r.id] = 0;
   state.resources.structure = SEED_STRUCTURE; // fresh-Scale bootstrap seed
-  for (const g of GENERATORS) state.generators[g.id] = 0;
+  for (const g of generatorsOf(state)) state.generators[g.id] = 0;
   state.structureThisCollapse = 0;
   state.overclockEndsAt = 0;        // active buffs do not survive a Collapse
   state.overclockCooldownEndsAt = 0;
@@ -62,7 +65,7 @@ export function upgradeCost(up, level) {
 }
 
 export function buyUpgrade(state, upId) {
-  const up = UPGRADE_BY_ID[upId];
+  const up = upgradesOf(state).find((u) => u.id === upId);
   if (!up) return false;
   const level = (state.sigmaUpgrades[upId] || 0);
   const cost = up.cost(level);

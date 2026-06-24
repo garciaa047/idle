@@ -552,6 +552,148 @@ button.primary {
 }
 .notice-body { color: var(--text-dim); font-size: 0.82rem; margin-top: 4px; }
 
+/* --- Scale banner (re-themed per Scale) --- */
+#scale-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 2px 0;
+}
+.scale-eyebrow {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.scale-name {
+  font-weight: 800;
+  font-size: 1.05rem;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* --- Automator panel --- */
+.auto-master, .auto-toggle {
+  border: 1px solid #2a3554;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  cursor: pointer;
+  min-width: 52px;
+}
+.auto-master.on, .auto-toggle.on {
+  background: linear-gradient(180deg, var(--ok), #2faa66);
+  border-color: var(--ok);
+  color: #06241a;
+}
+#auto-gens { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.auto-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+.auto-gen {
+  background: var(--bg);
+  border: 1px solid #232d4a;
+  border-radius: 9px;
+  padding: 8px 12px;
+}
+.auto-reserve { margin-top: 6px; flex-wrap: wrap; }
+.auto-reserve label { color: var(--text-dim); font-size: 0.85rem; }
+.auto-reserve input[type=range] { flex: 1 1 140px; accent-color: var(--accent); }
+.auto-cheapest { margin-top: 10px; color: var(--text-dim); cursor: pointer; justify-content: flex-start; }
+.auto-cheapest input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* --- Ascend panel + Aeon shop --- */
+.ascend-btn {
+  width: 100%;
+  margin-top: 14px;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #06241a;
+  cursor: pointer;
+  background: linear-gradient(180deg, #ffd24b, #ffb24b);
+}
+.ascend-btn:disabled { background: #20283f; color: var(--text-dim); cursor: not-allowed; }
+.collapse-stat .aeon-gain { color: #ffd24b; font-weight: 800; }
+.aeon-balance { color: #ffd24b; font-weight: 700; font-variant-numeric: tabular-nums; }
+#aeon-upgrades { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.aeon-buy { border-color: #6a5a2a !important; color: #ffd24b !important; }
+
+/* --- Scale roadmap --- */
+#roadmap-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.roadmap-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid #232d4a;
+  border-radius: 9px;
+  font-size: 0.9rem;
+}
+.roadmap-row .rm-num {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-card-hi);
+  color: var(--text-dim);
+  font-size: 0.75rem; font-weight: 700;
+}
+.roadmap-row .rm-name { flex: 1; }
+.roadmap-row .rm-tag { color: var(--text-dim); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; }
+.roadmap-row.rm-current { border-color: var(--accent-2); }
+.roadmap-row.rm-current .rm-num { background: linear-gradient(180deg, var(--accent), var(--accent-2)); color: #fff; }
+.roadmap-row.rm-current .rm-tag { color: var(--accent-2); }
+.roadmap-row.rm-locked { opacity: 0.55; }
+
+/* --- Settings close button --- */
+#settings-close {
+  position: absolute;
+  top: calc(14px + env(safe-area-inset-top));
+  right: 16px;
+  width: 34px; height: 34px;
+  border: 1px solid #2a3554;
+  border-radius: 9px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+/* --- Offline modal meta block --- */
+.offline-meta {
+  margin: 10px 0;
+  padding: 8px 0;
+  border-top: 1px solid #232d4a;
+}
+.offline-meta .gain-row span:last-child { color: var(--text); }
+
+/* --- Version badge --- */
+#version-badge {
+  position: fixed;
+  right: calc(8px + env(safe-area-inset-right));
+  bottom: calc(6px + env(safe-area-inset-bottom));
+  color: var(--text-dim);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 5;
+  letter-spacing: 0.04em;
+}
+
 /* --- Lightweight beats (Phase 8 gets real juice) --- */
 @keyframes flash-collapse {
   0% { box-shadow: inset 0 0 0 2000px rgba(176, 107, 255, 0.18); }

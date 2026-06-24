@@ -2,124 +2,110 @@
 // Throttled to ~30fps (and skips writes when displayed text is unchanged) to save
 // iPhone battery during long idle sessions, even though the sim ticks every frame.
 //
-// Phase 2: one computeFlow() per frame feeds every readout (resource rates, per-
-// converter efficiency, breakdown tooltips). Chain rows / intermediate resources
-// reveal as unlockedDepth grows; the Flux panel reveals after the first Collapse.
+// Phase 3: everything is read from the CURRENT Scale via the scales.js accessors.
+// Because structural ids are stable across Scales, the DOM skeleton is built once
+// (from Scale 1) and only the DISPLAY names/symbols/theme update per frame — so
+// entering Scale 2 visibly re-themes without a rebuild.
 
 import { format } from '../engine/format.js';
 import { computeFlow, breakdownFor } from '../engine/tick.js';
-import { RESOURCES, RESOURCE_BY_ID } from '../content/resources.js';
-import { GENERATORS, bulkCost, maxAffordable, isActive } from '../content/generators.js';
-import { UPGRADES } from '../content/upgrades.js';
+import { isActive, bulkCost, maxAffordable } from '../content/generators.js';
+import {
+  SCALES, SCALE_ROADMAP, scaleOf, resourcesOf, generatorsOf, upgradesOf, hasNextScale,
+} from '../content/scales.js';
+import { AEON_UPGRADES, aeonLevel } from '../content/aeon.js';
 import { sigmaGain, canCollapse, upgradeCost } from '../engine/prestige.js';
+import { canAscend, ascendGain } from '../engine/ascend.js';
 import { overclockStatus } from '../engine/overclock.js';
+import { canOverdrive, canConvergence, canFocus, overdriveActive } from '../engine/flux.js';
 import {
-  canOverdrive, canConvergence, canFocus, overdriveActive,
-} from '../engine/flux.js';
-import {
-  S_REF, OVERCLOCK_MULT, FLUX_CAP, SURGE_MULT,
+  CACHE_VERSION, S_REF, ASCEND_SIGMA_REQ, OVERCLOCK_MULT, FLUX_CAP,
   OVERDRIVE_COST, OVERDRIVE_MULT, OVERDRIVE_DURATION,
   CONVERGENCE_COST, CONVERGENCE_SECONDS,
   SINGULARITY_FOCUS_COST, SINGULARITY_FOCUS_BONUS,
 } from '../engine/constants.js';
 
-const RENDER_INTERVAL = 1000 / 30; // ~30fps cap on DOM updates
+const RENDER_INTERVAL = 1000 / 30;
 const BUY_AMOUNTS = [1, 10, 'max'];
+const SCALE1 = SCALES[0]; // the stable id skeleton (all Scales share these ids)
 
-// Flux abilities as a small data table so the rows are generic (no per-ability code).
 const FLUX_ABILITIES = [
   {
     id: 'overdrive', name: 'Overdrive', cost: OVERDRIVE_COST, handler: 'onOverdrive',
-    desc: `×${OVERDRIVE_MULT} all · ${OVERDRIVE_DURATION}s`,
-    can: (s, now) => canOverdrive(s, now),
+    desc: `×${OVERDRIVE_MULT} all · ${OVERDRIVE_DURATION}s`, can: (s, now) => canOverdrive(s, now),
   },
   {
     id: 'convergence', name: 'Convergence', cost: CONVERGENCE_COST, handler: 'onConvergence',
-    desc: `Fill stocks to ~${CONVERGENCE_SECONDS}s`,
-    can: (s) => canConvergence(s),
+    desc: `Fill stocks to ~${CONVERGENCE_SECONDS}s`, can: (s) => canConvergence(s),
   },
   {
     id: 'focus', name: 'Singularity Focus', cost: SINGULARITY_FOCUS_COST, handler: 'onFocus',
-    desc: `+${Math.round(SINGULARITY_FOCUS_BONUS * 100)}% σ next Collapse`,
-    can: (s) => canFocus(s),
+    desc: `+${Math.round(SINGULARITY_FOCUS_BONUS * 100)}% σ next Collapse`, can: (s) => canFocus(s),
   },
 ];
 
 let lastRender = 0;
-const lastText = new Map(); // element -> last written string, to skip no-op writes
-const expanded = new Set(); // resourceIds whose breakdown tooltip is open
-let els = null;             // cached DOM references, built once on init
+const lastText = new Map();
+const expanded = new Set();
+let lastThemeScale = -1;
+let els = null;
 let handlers = null;
 
 function setText(el, text) {
-  if (!el) return;
-  if (lastText.get(el) === text) return;
+  if (!el || lastText.get(el) === text) return;
   lastText.set(el, text);
   el.textContent = text;
 }
-
 function setHTML(el, html) {
-  if (!el) return;
-  if (lastText.get(el) === html) return;
+  if (!el || lastText.get(el) === html) return;
   lastText.set(el, html);
   el.innerHTML = html;
 }
+function setDisabled(el, d) { if (el && el.disabled !== d) el.disabled = d; }
+function setClass(el, cls, on) { if (el && el.classList.contains(cls) !== on) el.classList.toggle(cls, on); }
 
-function setDisabled(el, disabled) {
-  if (!el) return;
-  if (el.disabled !== disabled) el.disabled = disabled;
-}
-
-function setClass(el, cls, on) {
-  if (!el) return;
-  if (el.classList.contains(cls) !== on) el.classList.toggle(cls, on);
-}
-
-// How many units the current buy-amount setting would purchase, and their cost.
-// Semantics match buy(): "up to the chosen count OR as many as affordable".
 function plannedBuy(state, gen) {
   const owned = state.generators[gen.id] || 0;
   const budget = state.resources[gen.costResource] || 0;
   const amt = state.settings.buyAmount;
   const affordable = maxAffordable(gen, owned, budget);
   const nominal = amt === 'max' ? affordable : Math.min(amt, affordable);
-  const count = Math.max(1, nominal); // display falls back to next-1 when unaffordable
+  const count = Math.max(1, nominal);
   return { count, cost: bulkCost(gen, owned, count), can: affordable >= 1 };
 }
 
-// --- Build the static DOM skeleton once -------------------------------------
+// --- Build the static DOM skeleton once (from Scale 1's stable ids) ----------
 export function initRender(root, h) {
   handlers = h;
 
-  // Resources — each card's rate is tap-to-expand for an itemized breakdown.
+  // Resources
   const resourceWrap = root.querySelector('#resources');
   const resourceEls = {};
-  for (const r of RESOURCES) {
+  for (const r of SCALE1.resources) {
     const card = document.createElement('div');
     card.className = 'resource';
     card.innerHTML = `
-      <div class="resource-name">${r.name}</div>
+      <div class="resource-name" data-name></div>
       <div class="resource-amount" data-amount></div>
-      <button class="resource-rate" data-rate aria-label="Show ${r.name} breakdown"></button>
+      <button class="resource-rate" data-rate aria-label="Show breakdown"></button>
       <div class="breakdown hidden" data-breakdown></div>`;
     resourceWrap.appendChild(card);
-    const rateBtn = card.querySelector('[data-rate]');
-    rateBtn.addEventListener('click', () => {
+    card.querySelector('[data-rate]').addEventListener('click', () => {
       if (expanded.has(r.id)) expanded.delete(r.id); else expanded.add(r.id);
     });
     resourceEls[r.id] = {
       card,
+      name: card.querySelector('[data-name]'),
       amount: card.querySelector('[data-amount]'),
-      rate: rateBtn,
+      rate: card.querySelector('[data-rate]'),
       breakdown: card.querySelector('[data-breakdown]'),
     };
   }
 
-  // Overclock button
   const overclockBtn = root.querySelector('#overclock-btn');
   overclockBtn.addEventListener('click', () => handlers.onOverclock());
 
-  // Flux ability rows
+  // Flux abilities
   const fluxWrap = root.querySelector('#flux-abilities');
   const fluxEls = {};
   for (const ab of FLUX_ABILITIES) {
@@ -133,10 +119,7 @@ export function initRender(root, h) {
       <button class="fa-buy" data-fabuy>${format(ab.cost)} ⚡</button>`;
     fluxWrap.appendChild(row);
     row.querySelector('[data-fabuy]').addEventListener('click', () => handlers[ab.handler]());
-    fluxEls[ab.id] = {
-      buy: row.querySelector('[data-fabuy]'),
-      status: row.querySelector('[data-fastatus]'),
-    };
+    fluxEls[ab.id] = { buy: row.querySelector('[data-fabuy]'), status: row.querySelector('[data-fastatus]') };
   }
 
   // Buy-amount toggle
@@ -151,17 +134,16 @@ export function initRender(root, h) {
     toggleBtns[amt] = b;
   }
 
-  // Generators (producers + the converter ladder; converters reveal as unlocked).
+  // Generators
   const genWrap = root.querySelector('#generators');
   const genEls = {};
-  for (const g of GENERATORS) {
+  for (const g of SCALE1.ladder) {
     const row = document.createElement('div');
     row.className = 'generator';
-    // Every converter (anything with `consumes`) shows a throttle / efficiency line.
     const consumeLine = g.consumes ? `<div class="gen-throttle" data-throttle></div>` : '';
     row.innerHTML = `
       <div class="gen-info">
-        <div class="gen-name">${g.name}</div>
+        <div class="gen-name" data-genname>${g.name}</div>
         <div class="gen-meta">Owned <span data-owned>0</span> · <span data-each></span></div>
         ${consumeLine}
       </div>
@@ -173,6 +155,7 @@ export function initRender(root, h) {
     row.querySelector('[data-buy]').addEventListener('click', () => handlers.onBuy(g.id));
     genEls[g.id] = {
       row,
+      name: row.querySelector('[data-genname]'),
       owned: row.querySelector('[data-owned]'),
       each: row.querySelector('[data-each]'),
       throttle: row.querySelector('[data-throttle]'),
@@ -181,6 +164,26 @@ export function initRender(root, h) {
       buy: row.querySelector('[data-buy]'),
     };
   }
+
+  // Automator panel
+  const autoMaster = root.querySelector('[data-auto-master]');
+  autoMaster.addEventListener('click', () => handlers.onAutoMaster());
+  const autoGenWrap = root.querySelector('#auto-gens');
+  const autoGenEls = {};
+  for (const g of SCALE1.ladder) {
+    const row = document.createElement('div');
+    row.className = 'auto-row auto-gen';
+    row.innerHTML = `<span data-autoname>${g.name}</span><button class="auto-toggle" data-autotoggle>Off</button>`;
+    autoGenWrap.appendChild(row);
+    row.querySelector('[data-autotoggle]').addEventListener('click', () => handlers.onAutoGen(g.id));
+    autoGenEls[g.id] = {
+      row, name: row.querySelector('[data-autoname]'), toggle: row.querySelector('[data-autotoggle]'),
+    };
+  }
+  const reserveSlider = root.querySelector('[data-reserve]');
+  reserveSlider.addEventListener('input', () => handlers.onAutoReserve(Number(reserveSlider.value)));
+  const cheapestBox = root.querySelector('[data-cheapest]');
+  cheapestBox.addEventListener('change', () => handlers.onAutoCheapest(cheapestBox.checked));
 
   // Collapse panel
   const collapse = root.querySelector('#collapse-panel');
@@ -192,13 +195,12 @@ export function initRender(root, h) {
     <div class="collapse-stat">σ on Collapse <span class="sigma-gain" data-sigmagain>0</span></div>
     <button class="collapse-btn" data-collapse>Collapse</button>
     <div class="collapse-hint" data-collapsehint></div>`;
-  const collapseBtn = collapse.querySelector('[data-collapse]');
-  collapseBtn.addEventListener('click', () => handlers.onCollapse());
+  collapse.querySelector('[data-collapse]').addEventListener('click', () => handlers.onCollapse());
 
-  // Singularity shop rows
+  // Singularity shop
   const shopWrap = root.querySelector('#sigma-upgrades');
   const upgradeEls = {};
-  for (const up of UPGRADES) {
+  for (const up of SCALE1.sigma.upgrades) {
     const row = document.createElement('div');
     row.className = 'upgrade';
     row.innerHTML = `
@@ -209,14 +211,47 @@ export function initRender(root, h) {
       <button class="upg-buy" data-upbuy>σ <span data-upcost></span></button>`;
     shopWrap.appendChild(row);
     row.querySelector('[data-upbuy]').addEventListener('click', () => handlers.onBuyUpgrade(up.id));
-    upgradeEls[up.id] = {
-      level: row.querySelector('[data-level]'),
-      cost: row.querySelector('[data-upcost]'),
-      buy: row.querySelector('[data-upbuy]'),
-    };
+    upgradeEls[up.id] = { level: row.querySelector('[data-level]'), cost: row.querySelector('[data-upcost]'), buy: row.querySelector('[data-upbuy]') };
   }
 
+  // Ascend panel
+  root.querySelector('[data-ascend]').addEventListener('click', () => handlers.onAscend());
+
+  // Aeon shop
+  const aeonWrap = root.querySelector('#aeon-upgrades');
+  const aeonEls = {};
+  for (const up of AEON_UPGRADES) {
+    const row = document.createElement('div');
+    row.className = 'upgrade aeon-upgrade';
+    row.innerHTML = `
+      <div class="upg-info">
+        <div class="upg-name">${up.name} <span class="upg-level" data-level></span></div>
+        <div class="upg-effect">${up.effectText}</div>
+      </div>
+      <button class="upg-buy aeon-buy" data-aeonbuy>Æ <span data-aeoncost></span></button>`;
+    aeonWrap.appendChild(row);
+    row.querySelector('[data-aeonbuy]').addEventListener('click', () => handlers.onBuyAeon(up.id));
+    aeonEls[up.id] = { level: row.querySelector('[data-level]'), cost: row.querySelector('[data-aeoncost]'), buy: row.querySelector('[data-aeonbuy]') };
+  }
+
+  // Scale roadmap
+  const roadmapWrap = root.querySelector('#roadmap-list');
+  const roadmapEls = [];
+  SCALE_ROADMAP.forEach((name, i) => {
+    const row = document.createElement('div');
+    row.className = 'roadmap-row';
+    row.innerHTML = `<span class="rm-num">${i + 1}</span><span class="rm-name" data-rmname>${name}</span><span class="rm-tag" data-rmtag></span>`;
+    roadmapWrap.appendChild(row);
+    roadmapEls.push({ row, name: row.querySelector('[data-rmname]'), tag: row.querySelector('[data-rmtag]') });
+  });
+
+  // Version badge (shows the active CACHE_VERSION; updates if the constant changes)
+  setText(root.querySelector('[data-version]'), CACHE_VERSION);
+
   els = {
+    root,
+    scaleNum: root.querySelector('[data-scale-num]'),
+    scaleName: root.querySelector('[data-scale-name]'),
     resources: resourceEls,
     overclockBtn,
     flux: {
@@ -227,19 +262,41 @@ export function initRender(root, h) {
     },
     toggleBtns,
     generators: genEls,
+    automator: {
+      panel: root.querySelector('#automator-panel'),
+      master: autoMaster,
+      gens: autoGenEls,
+      reserveSlider,
+      reserveVal: root.querySelector('[data-reserve-val]'),
+      cheapestRow: root.querySelector('[data-cheapest-row]'),
+      cheapestBox,
+    },
     collapse: {
       stc: collapse.querySelector('[data-stc]'),
       sigmaGain: collapse.querySelector('[data-sigmagain]'),
-      btn: collapseBtn,
+      btn: collapse.querySelector('[data-collapse]'),
       hint: collapse.querySelector('[data-collapsehint]'),
     },
     shop: root.querySelector('#sigma-shop'),
     sigmaBalance: root.querySelector('#sigma-shop [data-sigma]'),
     upgrades: upgradeEls,
+    ascend: {
+      panel: root.querySelector('#ascend-panel'),
+      nextScale: root.querySelector('[data-next-scale]'),
+      gain: root.querySelector('[data-aeongain]'),
+      btn: root.querySelector('[data-ascend]'),
+      hint: root.querySelector('[data-ascendhint]'),
+    },
+    aeon: {
+      panel: root.querySelector('#aeon-shop'),
+      balance: root.querySelector('#aeon-shop [data-aeon]'),
+      upgrades: aeonEls,
+    },
+    roadmap: roadmapEls,
   };
 }
 
-// --- Per-frame update (throttles its own work) ------------------------------
+// --- Per-frame update --------------------------------------------------------
 export function render(state, now = performance.now()) {
   if (!els) return;
   if (now - lastRender < RENDER_INTERVAL) return;
@@ -247,20 +304,33 @@ export function render(state, now = performance.now()) {
 
   const wall = Date.now();
   const depth = state.unlockedDepth || 0;
-  const flow = computeFlow(state, wall); // single steady-state read for the whole frame
+  const scale = scaleOf(state);
+  const flow = computeFlow(state, wall);
+  const resById = {};
+  for (const r of scale.resources) resById[r.id] = r;
 
-  // Resources — hidden until the chain is deep enough to produce them.
-  for (const r of RESOURCES) {
+  // Scale banner + per-Scale theme (light visual shift via CSS vars)
+  setText(els.scaleNum, String(state.currentScale || 1));
+  setText(els.scaleName, scale.name);
+  if (scale.theme && lastThemeScale !== scale.id) {
+    document.documentElement.style.setProperty('--accent', scale.theme.accent);
+    document.documentElement.style.setProperty('--accent-2', scale.theme.accent2);
+    lastThemeScale = scale.id;
+  }
+
+  // Resources (re-themed names; hidden until the chain is deep enough)
+  for (const r of scale.resources) {
     const e = els.resources[r.id];
     const visible = depth >= (r.revealDepth || 0);
     setClass(e.card, 'hidden', !visible);
     if (!visible) continue;
+    setText(e.name, r.name);
     setText(e.amount, format(state.resources[r.id] || 0));
     setText(e.rate, `${format(flow.supply[r.id] || 0)}/s`);
     renderBreakdown(state, r, e, wall, flow);
   }
 
-  // Overclock button (three states)
+  // Overclock
   const oc = overclockStatus(state, wall);
   const ob = els.overclockBtn;
   if (oc.phase === 'active') setText(ob, `OVERCLOCK ×${OVERCLOCK_MULT} — ${oc.seconds}s`);
@@ -272,34 +342,30 @@ export function render(state, now = performance.now()) {
 
   renderFlux(state, wall);
 
-  // Buy-amount toggle active highlight
-  for (const amt of BUY_AMOUNTS) {
-    setClass(els.toggleBtns[amt], 'active', state.settings.buyAmount === amt);
-  }
+  for (const amt of BUY_AMOUNTS) setClass(els.toggleBtns[amt], 'active', state.settings.buyAmount === amt);
 
-  // Generators — converter rows reveal as their tier unlocks.
-  for (const g of GENERATORS) {
+  // Generators (re-themed names; converter rows reveal as their tier unlocks)
+  for (const g of scale.ladder) {
     const e = els.generators[g.id];
     const active = isActive(g, depth);
     setClass(e.row, 'hidden', !active);
     if (!active) continue;
-
+    setText(e.name, g.name);
     const owned = state.generators[g.id] || 0;
     setText(e.owned, format(owned));
 
     const out = flow.gens[g.id];
-    const sym = RESOURCE_BY_ID[out.resource].symbol;
-    setText(e.each, `+${format(out.rate)} ${sym}/s`);
+    setText(e.each, `+${format(out.rate)} ${resById[out.resource].symbol}/s`);
 
     if (e.throttle) {
       const eff = out.eff;
       const pct = Math.round(eff * 100);
       const inputs = Object.entries(g.consumes)
-        .map(([res, rate]) => `${format(owned * rate)} ${RESOURCE_BY_ID[res].symbol}`)
+        .map(([res, rate]) => `${format(owned * rate)} ${resById[res].symbol}`)
         .join(' + ');
       let note = `Consumes ${inputs}/s · ${pct}%`;
       const starved = owned > 0 && eff < 1;
-      if (starved) note += ` — ${starvedInput(g, flow)} starved`;
+      if (starved) note += ` — ${starvedInput(g, flow, resById)} starved`;
       setText(e.throttle, note);
       setClass(e.throttle, 'starved', starved);
     }
@@ -310,21 +376,22 @@ export function render(state, now = performance.now()) {
     setDisabled(e.buy, !plan.can);
   }
 
+  renderAutomator(state, scale, depth);
+
   // Collapse panel
-  const gain = sigmaGain(state, wall);
   setText(els.collapse.stc, format(state.structureThisCollapse || 0));
-  setText(els.collapse.sigmaGain, format(gain));
+  setText(els.collapse.sigmaGain, format(sigmaGain(state, wall)));
   const ready = canCollapse(state);
   setDisabled(els.collapse.btn, !ready);
   setText(els.collapse.hint, ready ? '' : `Need ${format(S_REF)} Structure produced to mint 1 σ.`);
 
-  // Singularity shop — reveal once σ has ever been earned
+  // Singularity shop
   const reveal = (state.sigma || 0) > 0 || state.flags.sawSigma ||
-    UPGRADES.some((u) => (state.sigmaUpgrades[u.id] || 0) > 0);
+    upgradesOf(state).some((u) => (state.sigmaUpgrades[u.id] || 0) > 0);
   setClass(els.shop, 'hidden', !reveal);
   if (reveal) {
     setText(els.sigmaBalance, format(state.sigma || 0));
-    for (const up of UPGRADES) {
+    for (const up of upgradesOf(state)) {
       const e = els.upgrades[up.id];
       const level = state.sigmaUpgrades[up.id] || 0;
       const cost = upgradeCost(up, level);
@@ -333,56 +400,121 @@ export function render(state, now = performance.now()) {
       setDisabled(e.buy, (state.sigma || 0) < cost);
     }
   }
+
+  renderAscend(state);
+  renderAeon(state);
+  renderRoadmap(state);
 }
 
-// Flux meter + ability buttons. Revealed after the first Collapse so minute-one
-// stays uncluttered (Flux quietly accrues before then).
 function renderFlux(state, now) {
   const reveal = !!state.flags.sawSigma;
   setClass(els.flux.section, 'hidden', !reveal);
   if (!reveal) return;
-
   const flux = state.flux || 0;
   setText(els.flux.amount, `${Math.floor(flux)} / ${FLUX_CAP} ⚡`);
-  const fill = els.flux.fill;
   const pct = `${Math.max(0, Math.min(100, (flux / FLUX_CAP) * 100)).toFixed(1)}%`;
-  if (fill.style.width !== pct) fill.style.width = pct;
-
+  if (els.flux.fill.style.width !== pct) els.flux.fill.style.width = pct;
   for (const ab of FLUX_ABILITIES) {
     const e = els.flux.abilities[ab.id];
     setDisabled(e.buy, !ab.can(state, now));
-    // Status hint: active timer / armed flag for the relevant abilities.
     let status = '';
-    if (ab.id === 'overdrive' && overdriveActive(state, now)) {
-      status = `active ${Math.ceil((state.overdriveEndsAt - now) / 1000)}s`;
-    } else if (ab.id === 'focus' && state.singularityFocusArmed) {
-      status = 'armed';
-    }
+    if (ab.id === 'overdrive' && overdriveActive(state, now)) status = `active ${Math.ceil((state.overdriveEndsAt - now) / 1000)}s`;
+    else if (ab.id === 'focus' && state.singularityFocusArmed) status = 'armed';
     setText(e.status, status);
   }
 }
 
-// Itemized production breakdown tooltip (tap-to-expand; no hover on touch).
+function renderAutomator(state, scale, depth) {
+  const a = state.automator;
+  setClass(els.automator.panel, 'hidden', !a.unlocked);
+  if (!a.unlocked) return;
+  setText(els.automator.master, a.master ? 'On' : 'Off');
+  setClass(els.automator.master, 'on', a.master);
+  for (const g of scale.ladder) {
+    const e = els.automator.gens[g.id];
+    const active = isActive(g, depth);
+    setClass(e.row, 'hidden', !active);
+    if (!active) continue;
+    setText(e.name, g.name);
+    const on = !!a.perGen[g.id];
+    setText(e.toggle, on ? 'On' : 'Off');
+    setClass(e.toggle, 'on', on);
+  }
+  setText(els.automator.reserveVal, String(a.reservePct || 0));
+  if (els.automator.reserveSlider.value !== String(a.reservePct || 0)) {
+    els.automator.reserveSlider.value = String(a.reservePct || 0);
+  }
+  // "Buy cheapest" only once Automation Matrix is purchased.
+  const matrix = aeonLevel(state, 'automationMatrix');
+  setClass(els.automator.cheapestRow, 'hidden', matrix < 1);
+  if (els.automator.cheapestBox.checked !== !!a.buyCheapest) els.automator.cheapestBox.checked = !!a.buyCheapest;
+}
+
+function renderAscend(state) {
+  // Reveal once the gate has ever been met (latched via sawAscend) so it stays
+  // visible even after a reset closes the gate.
+  const reveal = state.flags.sawAscend && hasNextScale(state);
+  setClass(els.ascend.panel, 'hidden', !reveal);
+  if (!reveal) return;
+  const next = SCALES[(state.currentScale || 1)]; // next Scale def (index = currentScale)
+  setText(els.ascend.nextScale, next ? next.name : '—');
+  setText(els.ascend.gain, format(ascendGain(state)));
+  const ready = canAscend(state);
+  setDisabled(els.ascend.btn, !ready);
+  if (ready) {
+    setText(els.ascend.hint, '');
+  } else if ((state.unlockedDepth || 0) < 3) {
+    setText(els.ascend.hint, 'Fully deepen the chain (reach the top tier) to Ascend.');
+  } else {
+    setText(els.ascend.hint, `Earn ${format(ASCEND_SIGMA_REQ)} σ this Scale to Ascend (${format(state.sigmaThisScale || 0)} so far).`);
+  }
+}
+
+function renderAeon(state) {
+  const reveal = state.flags.sawAscend || (state.aeons || 0) > 0;
+  setClass(els.aeon.panel, 'hidden', !reveal);
+  if (!reveal) return;
+  setText(els.aeon.balance, format(state.aeons || 0));
+  for (const up of AEON_UPGRADES) {
+    const e = els.aeon.upgrades[up.id];
+    const level = aeonLevel(state, up.id);
+    const cost = up.cost(level);
+    setText(e.level, `Lv ${level}`);
+    setText(e.cost, format(cost));
+    setDisabled(e.buy, (state.aeons || 0) < cost);
+  }
+}
+
+function renderRoadmap(state) {
+  const cur = state.currentScale || 1;
+  els.roadmap.forEach((e, i) => {
+    const num = i + 1;
+    const defined = num <= SCALES.length;
+    setText(e.name, defined ? SCALES[i].name : '???');
+    let tag = '';
+    if (num === cur) tag = 'Current';
+    else if (num < cur) tag = 'Done';
+    else if (!defined) tag = 'Locked';
+    setText(e.tag, tag);
+    setClass(e.row, 'rm-current', num === cur);
+    setClass(e.row, 'rm-locked', num > cur);
+  });
+}
+
 function renderBreakdown(state, r, e, now, flow) {
   const open = expanded.has(r.id);
   setClass(e.breakdown, 'hidden', !open);
   setClass(e.rate, 'open', open);
   if (!open) return;
-
   const b = breakdownFor(state, r.id, now, flow);
   const rows = [`<div class="bd-row"><span>Base</span><span>+${format(b.base)}/s</span></div>`];
-  for (const it of b.items) {
-    rows.push(`<div class="bd-row"><span>${it.source}</span><span>×${it.factor.toFixed(2)}</span></div>`);
-  }
-  if (b.throttled) {
-    rows.push(`<div class="bd-row"><span>Efficiency</span><span>${Math.round(b.eff * 100)}%</span></div>`);
-  }
+  for (const it of b.items) rows.push(`<div class="bd-row"><span>${it.source}</span><span>×${it.factor.toFixed(2)}</span></div>`);
+  if (b.throttled) rows.push(`<div class="bd-row"><span>Efficiency</span><span>${Math.round(b.eff * 100)}%</span></div>`);
   rows.push(`<div class="bd-row bd-total"><span>Effective</span><span>+${format(b.rate)}/s</span></div>`);
   setHTML(e.breakdown, rows.join(''));
 }
 
-// Which consumed input is the binding constraint (for the "X starved" note).
-function starvedInput(gen, flow) {
+function starvedInput(gen, flow, resById) {
   let worst = null;
   let worstRatio = Infinity;
   for (const res in gen.consumes) {
@@ -391,5 +523,5 @@ function starvedInput(gen, flow) {
     const ratio = (flow.supply[res] || 0) / demand;
     if (ratio < worstRatio) { worstRatio = ratio; worst = res; }
   }
-  return worst ? RESOURCE_BY_ID[worst].name : 'Input';
+  return worst ? resById[worst].name : 'Input';
 }

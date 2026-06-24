@@ -10,7 +10,8 @@
 // so each tier sees the freshly produced intermediate below it this same step.
 
 import { MAX_STEP, MAX_SUBSTEPS } from './constants.js';
-import { GENERATORS, CHAIN_UNLOCKS, isActive, activeOutput } from '../content/generators.js';
+import { isActive, activeOutput } from '../content/generators.js';
+import { generatorsOf, chainUnlocksOf } from '../content/scales.js';
 import { collectContributions, multiplierFor, itemize } from './multipliers.js';
 
 // The single place production/consumption math lives. dt is bounded (<= MAX_STEP).
@@ -18,10 +19,11 @@ function stepSimulation(state, dt) {
   const contribs = collectContributions(state);
   const mult = (target) => multiplierFor(contribs, target);
   const depth = state.unlockedDepth || 0;
+  const ladder = generatorsOf(state); // the current Scale's generators (data-driven)
 
   // Pass 1 — pure PRODUCERS (no `consumes`) add output to stock first, so a
   // producer's same-sub-step output is available to consumers this step.
-  for (const gen of GENERATORS) {
+  for (const gen of ladder) {
     if (gen.consumes) continue;
     const owned = state.generators[gen.id] || 0;
     if (owned <= 0) continue;
@@ -35,7 +37,7 @@ function stepSimulation(state, dt) {
   // CURRENT stock this sub-step. Outputs scale by efficiency; inputs consumed
   // proportionally. Bottom-to-top order means an upper tier already sees the
   // intermediate the tier below produced this step (multi-link throttling).
-  for (const gen of GENERATORS) {
+  for (const gen of ladder) {
     if (!gen.consumes) continue;
     if (!isActive(gen, depth)) continue; // inactive upper tiers do nothing yet
     const owned = state.generators[gen.id] || 0;
@@ -87,9 +89,10 @@ export function advance(state, seconds) {
 // Called after advance() (live + once after offline catch-up); the permanent
 // ×TIER_UNLOCK_MULT follows unlockedDepth automatically (see multipliers.js).
 export function checkUnlocks(state) {
+  const unlocks = chainUnlocksOf(state);
   const newly = [];
-  while ((state.unlockedDepth || 0) < CHAIN_UNLOCKS.length) {
-    const next = CHAIN_UNLOCKS[state.unlockedDepth];
+  while ((state.unlockedDepth || 0) < unlocks.length) {
+    const next = unlocks[state.unlockedDepth];
     if ((state.lifetimeStructure || 0) < next.threshold) break;
     state.unlockedDepth = next.depth;
     newly.push(next);
@@ -110,9 +113,10 @@ export function computeFlow(state, now = Date.now()) {
   const mult = (t) => multiplierFor(contribs, t);
   const supply = {};   // resourceId -> effective production rate available downstream
   const gens = {};     // genId -> { resource, rate (effective out), eff, owned }
+  const ladder = generatorsOf(state);
 
   // Producers first — their output is the base supply.
-  for (const gen of GENERATORS) {
+  for (const gen of ladder) {
     if (gen.consumes) continue;
     const owned = state.generators[gen.id] || 0;
     const { resource, rate } = activeOutput(gen, depth);
@@ -122,7 +126,7 @@ export function computeFlow(state, now = Date.now()) {
   }
 
   // Converters bottom-to-top so each reads the (already-computed) supply below it.
-  for (const gen of GENERATORS) {
+  for (const gen of ladder) {
     if (!gen.consumes) continue;
     const owned = state.generators[gen.id] || 0;
     const { resource, rate } = activeOutput(gen, depth);
@@ -174,7 +178,7 @@ export function breakdownFor(state, res, now = Date.now(), flow = null) {
   let base = 0;
   let eff = 1;
   let throttled = false;
-  for (const gen of GENERATORS) {
+  for (const gen of generatorsOf(state)) {
     if (!isActive(gen, depth)) continue;
     const o = activeOutput(gen, depth);
     if (o.resource !== res) continue;

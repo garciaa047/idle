@@ -4,6 +4,9 @@
 
 import { SAVE_VERSION, SEED_STRUCTURE, UNLOCK_THRESHOLDS } from './constants.js';
 import { defaultState } from './state.js';
+import { SCALES } from '../content/scales.js';
+import { AEON_UPGRADES } from '../content/aeon.js';
+import { defaultAutomator } from './automator.js';
 
 const STORAGE_KEY = 'aeonforge.save';
 
@@ -71,6 +74,33 @@ const MIGRATIONS = {
     s.resonanceNextAt = 0;
     return s;
   },
+
+  // v3 (Phase 2: single Scale, flat state) -> v4 (Phase 3: data-driven Scale
+  // system). WRAP the entire existing run as currentScale = 1 (Quantum Foam) with
+  // NO loss — every within-Scale field already maps onto Scale 1's state. Then add
+  // the cross-Scale fields: Æ, Aeon-shop levels, sigmaThisScale (seeded from banked
+  // σ so the first Ascend rewards prior effort), and a LOCKED Automator (the player
+  // hasn't Ascended yet). Settings preserved.
+  3: (s) => {
+    s.currentScale = s.currentScale ?? 1;
+
+    // sigmaThisScale: cumulative σ earned this Scale. Best available signal for an
+    // existing save is the currently-banked σ, so the first Ascend isn't punitive.
+    s.sigmaThisScale = s.sigmaThisScale ?? (s.sigma || 0);
+
+    s.aeons = s.aeons ?? 0;
+    s.aeonUpgrades = s.aeonUpgrades || {};
+    for (const u of AEON_UPGRADES) {
+      if (s.aeonUpgrades[u.id] === undefined) s.aeonUpgrades[u.id] = 0;
+    }
+
+    // Automator locked until the first Ascend; default (all-off) settings.
+    if (!s.automator) s.automator = defaultAutomator(SCALES[0]);
+
+    s.flags = s.flags || {};
+    if (s.flags.sawAscend === undefined) s.flags.sawAscend = false;
+    return s;
+  },
 };
 
 function migrate(state) {
@@ -96,6 +126,12 @@ function mergeDefaults(loaded) {
     resources: { ...base.resources, ...(loaded.resources || {}) },
     generators: { ...base.generators, ...(loaded.generators || {}) },
     sigmaUpgrades: { ...base.sigmaUpgrades, ...(loaded.sigmaUpgrades || {}) },
+    aeonUpgrades: { ...base.aeonUpgrades, ...(loaded.aeonUpgrades || {}) },
+    automator: {
+      ...base.automator,
+      ...(loaded.automator || {}),
+      perGen: { ...base.automator.perGen, ...((loaded.automator || {}).perGen || {}) },
+    },
     settings: { ...base.settings, ...(loaded.settings || {}) },
     flags: { ...base.flags, ...(loaded.flags || {}) },
   };

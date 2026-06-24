@@ -11,7 +11,8 @@
 // only needs the aggregate, but Phase 2's production-breakdown tooltips need the
 // itemization, so the capability is built in now.
 
-import { UPGRADES } from '../content/upgrades.js';
+import { upgradesOf } from '../content/scales.js';
+import { AEON_UPGRADES } from '../content/aeon.js';
 import { overclockActive } from './overclock.js';
 import {
   OVERCLOCK_MULT, TIER_UNLOCK_MULT, OVERDRIVE_MULT, SURGE_MULT, SINGULARITY_FOCUS_BONUS,
@@ -28,10 +29,18 @@ const PRODUCTION_TARGETS = new Set([
 export function collectContributions(state, now = Date.now()) {
   const out = [];
 
-  // σ-upgrades (persist across Collapses).
-  for (const up of UPGRADES) {
+  // σ-upgrades (this Scale's; persist across Collapses, wiped on Ascend).
+  for (const up of upgradesOf(state)) {
     const level = (state.sigmaUpgrades && state.sigmaUpgrades[up.id]) || 0;
     if (level <= 0) continue;
+    for (const c of up.contributions(level)) out.push({ source: up.name, ...c });
+  }
+
+  // Aeon-shop upgrades (Phase 3): permanent + GLOBAL, so they stack in EVERY Scale.
+  // Only the production ones expose contributions(); the rest apply elsewhere.
+  for (const up of AEON_UPGRADES) {
+    const level = (state.aeonUpgrades && state.aeonUpgrades[up.id]) || 0;
+    if (level <= 0 || !up.contributions) continue;
     for (const c of up.contributions(level)) out.push({ source: up.name, ...c });
   }
 

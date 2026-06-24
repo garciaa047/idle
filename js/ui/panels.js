@@ -3,7 +3,6 @@
 // by main.js, and never touches the simulation directly.
 
 import { format } from '../engine/format.js';
-import { RESOURCE_BY_ID } from '../content/resources.js';
 
 function formatDuration(seconds) {
   const s = Math.floor(seconds);
@@ -15,25 +14,28 @@ function formatDuration(seconds) {
   return `${sec}s`;
 }
 
-// Show the offline-gains modal. `gains` is a { resourceId: amountGained } map.
-// `awaySeconds` is real time away; `saturated` notes the T_CAP transparency line.
-export function showOfflineModal(root, { awaySeconds, gains, saturatedNote }) {
+// Show the offline-gains modal. `gains` is a { resourceId: amountGained } map;
+// `names` maps resource ids -> the current Scale's display names. We surface BOTH
+// real time away AND the effective time actually applied (vs the current cap) so
+// the saturating behaviour — and the value of Temporal Reservoir — is transparent.
+export function showOfflineModal(root, { awaySeconds, effectiveSeconds, tCap, gains, names }) {
   const modal = root.querySelector('#offline-modal');
   const body = modal.querySelector('#offline-body');
 
   const lines = Object.entries(gains)
     .filter(([, v]) => v > 0)
-    .map(([id, v]) => {
-      const name = RESOURCE_BY_ID[id] ? RESOURCE_BY_ID[id].name : id;
-      return `<div class="gain-row"><span>${name}</span><span>+${format(v)}</span></div>`;
-    })
+    .map(([id, v]) => `<div class="gain-row"><span>${(names && names[id]) || id}</span><span>+${format(v)}</span></div>`)
     .join('');
 
   body.innerHTML = `
     <p>You were away for <strong>${formatDuration(awaySeconds)}</strong>.</p>
     <div class="gains">${lines || '<div class="gain-row">No gains.</div>'}</div>
-    <p class="note">Offline Structure counts toward your next Collapse.</p>
-    <p class="note">${saturatedNote}</p>`;
+    <div class="offline-meta">
+      <div class="gain-row"><span>Real time away</span><span>${formatDuration(awaySeconds)}</span></div>
+      <div class="gain-row"><span>Effective time applied</span><span>${formatDuration(effectiveSeconds)}</span></div>
+      <div class="gain-row"><span>Offline cap</span><span>${formatDuration(tCap)}</span></div>
+    </div>
+    <p class="note">Production saturates toward the cap, so checking in often beats one long wait. Raise the cap with Temporal Reservoir in the Aeon shop.</p>`;
 
   modal.classList.add('open');
 }
@@ -64,10 +66,13 @@ export function initPanels(root, handlers) {
     e.currentTarget.classList.remove('show');
   });
 
-  // Settings panel toggle
+  // Settings panel toggle + explicit close button
   const panel = root.querySelector('#settings-panel');
   root.querySelector('#settings-toggle').addEventListener('click', () => {
     panel.classList.toggle('open');
+  });
+  root.querySelector('[data-close-settings]').addEventListener('click', () => {
+    panel.classList.remove('open');
   });
 
   // Export -> fill textarea + copy to clipboard

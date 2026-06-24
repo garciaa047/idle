@@ -2,8 +2,8 @@
 // Balancing happens here so no magic numbers leak into engine logic.
 
 // --- Save / cache versioning ---
-export const SAVE_VERSION = 3;      // bump when state schema changes (add a migration)
-export const CACHE_VERSION = 'aeon-forge-v3'; // bump to ship updates past the service worker
+export const SAVE_VERSION = 4;      // bump when state schema changes (add a migration)
+export const CACHE_VERSION = 'aeon-forge-v4'; // bump to ship updates past the service worker
 
 // --- Simulation ---
 export const MAX_STEP = 1.0;        // largest sub-step (seconds) for stepSimulation()
@@ -14,7 +14,9 @@ export const FRAME_DT_CLAMP = 2.0;  // clamp per-frame real delta to absorb tab-
 export const AUTOSAVE_INTERVAL = 15; // seconds between autosaves
 
 // --- Offline progress ---
-export const T_CAP = 7200;          // saturating cap (seconds) ~= 2 hours
+// T_CAP is now DERIVED (Phase 3): T_CAP_BASE + Temporal Reservoir bonus. See
+// tCapOf() in content/aeon.js. The saturating curve itself is unchanged.
+export const T_CAP_BASE = 7200;     // base saturating cap (seconds) ~= 2 hours
 export const OFFLINE_MIN_SECONDS = 30; // only show the offline modal past this much time away
 
 // --- Scale 1 ("Quantum Foam") economy ---------------------------------------
@@ -109,3 +111,26 @@ export const CONVERGENCE_COST = 30;
 export const CONVERGENCE_SECONDS = 60;  // fill each intermediate stock to this many sec of demand
 export const SINGULARITY_FOCUS_COST = 50;
 export const SINGULARITY_FOCUS_BONUS = 0.5; // +50% σ on the NEXT Collapse
+
+// --- Phase 3: Ascend (hard reset) + Aeons (Æ) -------------------------------
+// Ascend converts a Scale's banked σ into permanent, cross-Scale Æ. The gate is
+// "experienced the full Scale" (chain fully deepened) AND "built meaningful σ".
+export const ASCEND_SIGMA_REQ = 50;  // sigmaThisScale needed (plus unlockedDepth == 3)
+// Æ = floor( AEON_A * currentScale^AEON_Q * log10(1 + sigmaThisScale) ).
+// Scale^Q rewards depth; log10 keeps σ from exploding the payout.
+export const AEON_A = 1;
+export const AEON_Q = 1.5;
+
+// --- Phase 3: Aeon shop (permanent, global, cross-Scale; Phase 6 grows the tree) ---
+export const AEON_RESONANT_FACTOR = 1.5;     // ×all production per level
+export const AEON_INSIGHT_FACTOR = 1.25;     // σ gain × per level
+export const TEMPORAL_RESERVOIR_STEP = 3600; // +seconds to the offline cap per level
+export const AEON_RESONANT_COST = [1, 3];    // 1 * 3^level  Æ
+export const AEON_INSIGHT_COST = [2, 3];     // 2 * 3^level  Æ
+export const AEON_TEMPORAL_COST = [2, 4];    // 2 * 4^level  Æ
+export const AEON_AUTOMATION_COST = [3, 4];  // 3 * 4^level  Æ
+
+// --- Phase 3: Automator (first auto-buy; unlocked on first Ascend) -----------
+export const AUTOMATOR_BUY_CAP = 50;         // max generator buys per automator run
+export const AUTOMATOR_INTERVAL = 0.25;      // seconds between automator runs (a few/sec)
+export const AUTOMATOR_DEFAULT_RESERVE = 0;  // percent of Structure kept unspent by default
