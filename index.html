@@ -37,6 +37,16 @@
       <button id="overclock-btn" class="overclock">Overclock</button>
     </section>
 
+    <!-- Flux (active-only currency + strategic abilities); revealed after first Collapse -->
+    <section id="flux-section" class="panel hidden" aria-label="Flux">
+      <div class="panel-head">
+        <h2>Flux</h2>
+        <div class="flux-amount" data-flux>0</div>
+      </div>
+      <div class="flux-meter"><div class="flux-fill" data-fluxfill></div></div>
+      <div id="flux-abilities"></div>
+    </section>
+
     <!-- Buy-amount toggle (×1 / ×10 / Max) -->
     <div id="buy-toggle" class="buy-toggle" role="group" aria-label="Buy amount"></div>
 
@@ -74,6 +84,12 @@
       <div id="offline-body"></div>
       <button data-close-offline class="primary">Collect</button>
     </div>
+  </div>
+
+  <!-- Tier-unlock notification banner (tap to dismiss) -->
+  <div id="notice" role="status" aria-live="polite">
+    <div class="notice-title" data-notice-title></div>
+    <div class="notice-body" data-notice-body></div>
   </div>
 
   <div id="toast" role="status" aria-live="polite"></div>

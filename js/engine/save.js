@@ -2,7 +2,7 @@
 // framework. Export/Import are the safety net against iOS evicting site storage,
 // so they must be reliable.
 
-import { SAVE_VERSION, SEED_STRUCTURE } from './constants.js';
+import { SAVE_VERSION, SEED_STRUCTURE, UNLOCK_THRESHOLDS } from './constants.js';
 import { defaultState } from './state.js';
 
 const STORAGE_KEY = 'aeonforge.save';
@@ -33,6 +33,42 @@ const MIGRATIONS = {
 
     s.settings = s.settings || {};
     if (s.settings.buyAmount === undefined) s.settings.buyAmount = 1;
+    return s;
+  },
+
+  // v2 (Phase 1: Scale 1 economy) -> v3 (Phase 2: refinement chain + Flux +
+  // Resonance). Initialise the new intermediate stocks, the three upper
+  // converters, and the chain/flux/resonance fields. Settings preserved.
+  2: (s) => {
+    s.resources = s.resources || {};
+    s.resources.components = s.resources.components ?? 0;
+    s.resources.modules = s.resources.modules ?? 0;
+    s.resources.engines = s.resources.engines ?? 0;
+
+    s.generators = s.generators || {};
+    s.generators.assembler = s.generators.assembler ?? 0;
+    s.generators.synthesizer = s.generators.synthesizer ?? 0;
+    s.generators.integrator = s.generators.integrator ?? 0;
+
+    // Seed lifetimeStructure from the best signal an old save has, so depth seeding
+    // below isn't punitive to a returning tester (they had no such counter before).
+    s.lifetimeStructure = Math.max(s.structureThisCollapse || 0, s.resources.structure || 0);
+
+    // Seed unlockedDepth from existing progress: anyone who has earned σ (or bought
+    // a σ-upgrade) keeps at least depth 1; derive any higher depth from lifetime.
+    const hasProgress = (s.sigma || 0) > 0
+      || Object.values(s.sigmaUpgrades || {}).some((lvl) => (lvl || 0) > 0);
+    let depth = hasProgress ? 1 : 0;
+    for (let i = 0; i < UNLOCK_THRESHOLDS.length; i += 1) {
+      if (s.lifetimeStructure >= UNLOCK_THRESHOLDS[i]) depth = i + 1;
+    }
+    s.unlockedDepth = depth;
+
+    s.surgeEndsAt = 0;
+    s.overdriveEndsAt = 0;
+    s.flux = 0;
+    s.singularityFocusArmed = false;
+    s.resonanceNextAt = 0;
     return s;
   },
 };

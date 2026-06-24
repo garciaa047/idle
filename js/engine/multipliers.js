@@ -13,10 +13,15 @@
 
 import { UPGRADES } from '../content/upgrades.js';
 import { overclockActive } from './overclock.js';
-import { OVERCLOCK_MULT } from './constants.js';
+import {
+  OVERCLOCK_MULT, TIER_UNLOCK_MULT, OVERDRIVE_MULT, SURGE_MULT, SINGULARITY_FOCUS_BONUS,
+} from './constants.js';
 
-// 'all' expands only over real production resources — never over sigmaGain.
-const PRODUCTION_TARGETS = new Set(['energy', 'matter', 'structure']);
+// 'all' expands only over real production resources — never over sigmaGain. The
+// Phase 2 intermediate stocks (components/modules/engines) are production too.
+const PRODUCTION_TARGETS = new Set([
+  'energy', 'matter', 'components', 'modules', 'engines', 'structure',
+]);
 
 // Gather every active contribution from the current state. This is the single
 // source of truth for "what is scaling production right now".
@@ -33,6 +38,26 @@ export function collectContributions(state, now = Date.now()) {
   // Overclock surge (temporary, wall-clock bounded).
   if (overclockActive(state, now)) {
     out.push({ source: 'Overclock', target: 'all', factor: OVERCLOCK_MULT });
+  }
+
+  // Resonance Surge + Flux Overdrive — both temporary ×all, stored as wall-clock
+  // end timestamps (checked inline to avoid an import cycle with flux/resonance).
+  if ((state.surgeEndsAt || 0) > now) {
+    out.push({ source: 'Resonance Surge', target: 'all', factor: SURGE_MULT });
+  }
+  if ((state.overdriveEndsAt || 0) > now) {
+    out.push({ source: 'Flux Overdrive', target: 'all', factor: OVERDRIVE_MULT });
+  }
+
+  // Singularity Focus — arms a one-shot σ bonus that lands on the next Collapse.
+  if (state.singularityFocusArmed) {
+    out.push({ source: 'Singularity Focus', target: 'sigmaGain', factor: 1 + SINGULARITY_FOCUS_BONUS });
+  }
+
+  // Tier-unlock multiplier: each unlocked chain depth is a permanent ×all. Derived
+  // straight from unlockedDepth so the milestone power-jump needs no stored field.
+  if ((state.unlockedDepth || 0) > 0) {
+    out.push({ source: 'Tier Unlocks', target: 'all', factor: Math.pow(TIER_UNLOCK_MULT, state.unlockedDepth) });
   }
 
   return out;

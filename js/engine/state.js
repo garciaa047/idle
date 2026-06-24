@@ -41,6 +41,19 @@ export function defaultState() {
     structureThisCollapse: 0, // cumulative Structure PRODUCED since last Collapse
     overclockEndsAt: 0,       // wall-clock ms; surge active while now < this
     overclockCooldownEndsAt: 0,
+    surgeEndsAt: 0,           // Resonance Surge end (wall-clock ms)
+    overdriveEndsAt: 0,       // Flux Overdrive end (wall-clock ms)
+
+    // --- refinement chain (Phase 2) — persist across Collapse, NOT across Scale ---
+    // lifetimeStructure is cumulative Structure ever produced and NEVER resets; it
+    // drives progressive deepening. unlockedDepth is derived from it (0..3).
+    lifetimeStructure: 0,
+    unlockedDepth: 0,
+
+    // --- Flux (Phase 2 active-only currency) — persists across Collapse ---
+    flux: 0,
+    singularityFocusArmed: false, // next Collapse grants +SINGULARITY_FOCUS_BONUS σ
+    resonanceNextAt: 0,           // wall-clock ms of the next Resonance spawn (0 = unscheduled)
 
     settings: {
       buyAmount: 1, // 1 | 10 | 'max' — the ×1/×10/Max buy toggle

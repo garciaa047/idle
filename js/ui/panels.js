@@ -38,6 +38,18 @@ export function showOfflineModal(root, { awaySeconds, gains, saturatedNote }) {
   modal.classList.add('open');
 }
 
+// Tier-unlock notification banner: title + one-line explanation, auto-dismiss,
+// tap to dismiss early. Used for the "New tier unlocked" milestone moments.
+let noticeTimer = null;
+export function showNotice(root, title, body) {
+  const el = root.querySelector('#notice');
+  el.querySelector('[data-notice-title]').textContent = title;
+  el.querySelector('[data-notice-body]').textContent = body;
+  el.classList.add('show');
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => el.classList.remove('show'), 6500);
+}
+
 // Wire up the settings panel: toggle, export, import, hard reset. `handlers`
 // supplies the actual behaviors so this stays decoupled from engine modules.
 export function initPanels(root, handlers) {
@@ -45,6 +57,11 @@ export function initPanels(root, handlers) {
   const offlineModal = root.querySelector('#offline-modal');
   offlineModal.querySelector('[data-close-offline]').addEventListener('click', () => {
     offlineModal.classList.remove('open');
+  });
+
+  // Tier-unlock notice — tap to dismiss.
+  root.querySelector('#notice').addEventListener('click', (e) => {
+    e.currentTarget.classList.remove('show');
   });
 
   // Settings panel toggle
@@ -100,4 +117,9 @@ function flash(root, msg) {
   el.classList.add('show');
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Public toast (e.g. Resonance catch feedback, Flux ability confirmations).
+export function showToast(root, msg) {
+  flash(root, msg);
 }

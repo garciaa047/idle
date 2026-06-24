@@ -2,8 +2,8 @@
 // Balancing happens here so no magic numbers leak into engine logic.
 
 // --- Save / cache versioning ---
-export const SAVE_VERSION = 2;      // bump when state schema changes (add a migration)
-export const CACHE_VERSION = 'aeon-forge-v2'; // bump to ship updates past the service worker
+export const SAVE_VERSION = 3;      // bump when state schema changes (add a migration)
+export const CACHE_VERSION = 'aeon-forge-v3'; // bump to ship updates past the service worker
 
 // --- Simulation ---
 export const MAX_STEP = 1.0;        // largest sub-step (seconds) for stepSimulation()
@@ -61,3 +61,51 @@ export const UP_FAB_YIELD_COST = [1, 2];     // 1 * 2^level  σ
 export const UP_THROUGHPUT_COST = [1, 2];    // 1 * 2^level  σ
 export const UP_RESONANCE_COST = [2, 3];     // 2 * 3^level  σ
 export const UP_COLLAPSE_YIELD_COST = [3, 4]; // 3 * 4^level  σ
+
+// --- Phase 2: Refinement chain (the converter ladder deepens within the run) ---
+// The ladder is Fabricator(0) -> Assembler(1) -> Synthesizer(2) -> Integrator(3).
+// `unlockedDepth` (0..3) = how many UPPER tiers are unlocked; a converter at
+// chainIndex i is active iff i <= unlockedDepth, and the HIGHEST active converter
+// produces Structure while every lower one feeds its tier resource. (See
+// activeOutput() in generators.js — this is the one uniform rule, no per-tier code.)
+export const TIER_MULT = 1.5;        // units/sec an UPPER converter makes per owned unit
+export const TIER_UNLOCK_MULT = 2;   // permanent ×all production granted PER depth unlocked
+
+// Upper-converter cost curves (all priced in Structure). Fabricator stays Phase 1's.
+export const ASSEMBLER_BASE_COST = 200;
+export const ASSEMBLER_COST_GROWTH = 1.15;
+export const SYNTHESIZER_BASE_COST = 5e3;
+export const SYNTHESIZER_COST_GROWTH = 1.16;
+export const INTEGRATOR_BASE_COST = 1e5;
+export const INTEGRATOR_COST_GROWTH = 1.17;
+
+// lifetimeStructure (cumulative Structure EVER produced) thresholds that unlock
+// depth 1, 2, 3. With these, the first Collapse naturally precedes the first
+// deepening, so onboarding order (simple loop -> Collapse -> chain) is preserved.
+export const UNLOCK_THRESHOLDS = [5e3, 5e5, 5e7];
+
+// --- Phase 2: Resonance pickups (active burst reward, the "golden cookie") ----
+export const RESONANCE_MIN = 60;      // min seconds between spawns (visible only)
+export const RESONANCE_MAX = 180;     // max seconds between spawns
+export const RESONANCE_LIFETIME = 12; // seconds on screen before it drifts away
+// Weighted reward table (must sum to 1).
+export const RESONANCE_WEIGHTS = { surge: 0.45, cache: 0.35, flux: 0.20 };
+export const SURGE_MULT = 7;          // ×all production while a Surge is active
+export const SURGE_DURATION = 30;     // seconds a Surge lasts
+export const CACHE_SECONDS = 90;      // Cache reward = this many sec of current Structure output
+export const RESONANCE_FLUX_BURST = 30; // Flux-burst reward amount (on top of the catch bonus)
+
+// --- Phase 2: Flux (active-only currency funding strategic, bounded boosts) ----
+export const FLUX_CAP = 100;
+export const FLUX_GAIN_OVERCLOCK = 10;  // per Overclock tap
+export const FLUX_GAIN_RESONANCE = 15;  // per Resonance caught (any reward)
+export const FLUX_TRICKLE = 0.5;        // +Flux/sec while the document is VISIBLE
+export const FLUX_DRAIN = 1;            // -Flux/sec while the document is HIDDEN
+// Abilities (spend Flux; bounded, wall-clock-bounded effects).
+export const OVERDRIVE_COST = 40;
+export const OVERDRIVE_MULT = 5;        // ×all production
+export const OVERDRIVE_DURATION = 60;   // seconds
+export const CONVERGENCE_COST = 30;
+export const CONVERGENCE_SECONDS = 60;  // fill each intermediate stock to this many sec of demand
+export const SINGULARITY_FOCUS_COST = 50;
+export const SINGULARITY_FOCUS_BONUS = 0.5; // +50% σ on the NEXT Collapse

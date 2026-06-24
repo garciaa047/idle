@@ -33,14 +33,17 @@ export function canCollapse(state) {
 // or 0 if the gate wasn't met (caller should confirm first).
 export function performCollapse(state, now = Date.now()) {
   if (!canCollapse(state)) return 0;
-  const gain = sigmaGain(state, now);
+  const gain = sigmaGain(state, now);   // includes the Singularity Focus bonus if armed
   state.sigma = (state.sigma || 0) + gain;
+  state.singularityFocusArmed = false;  // the armed Flux bonus is consumed by this Collapse
   resetRun(state);
   return gain;
 }
 
 // Reset RUN-LEVEL state only. Used by Collapse (and reusable by Ascend in Phase 3).
-// PERSISTS: state.sigma, state.sigmaUpgrades, state.settings, state.flags.
+// PERSISTS: state.sigma, state.sigmaUpgrades, state.settings, state.flags, AND the
+// Phase 2 cross-Collapse progress — lifetimeStructure, unlockedDepth (chain depth),
+// and flux. Collapse rebuilds the FACTORY, not your unlocked tiers or banked Flux.
 export function resetRun(state) {
   for (const r of RESOURCES) state.resources[r.id] = 0;
   state.resources.structure = SEED_STRUCTURE; // fresh-Scale bootstrap seed
@@ -48,6 +51,8 @@ export function resetRun(state) {
   state.structureThisCollapse = 0;
   state.overclockEndsAt = 0;        // active buffs do not survive a Collapse
   state.overclockCooldownEndsAt = 0;
+  state.surgeEndsAt = 0;
+  state.overdriveEndsAt = 0;
 }
 
 // --- σ-shop ----------------------------------------------------------------

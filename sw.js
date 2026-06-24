@@ -6,7 +6,7 @@
 // promptly. (See README — forgetting to bump CACHE_VERSION means clients keep
 // serving the old cached files.)
 
-const CACHE_VERSION = 'aeon-forge-v2';
+const CACHE_VERSION = 'aeon-forge-v3';
 
 // Relative paths so the SW works from a domain root OR a project subpath.
 const APP_SHELL = [
@@ -24,11 +24,14 @@ const APP_SHELL = [
   './js/engine/multipliers.js',
   './js/engine/overclock.js',
   './js/engine/prestige.js',
+  './js/engine/flux.js',
+  './js/engine/resonance.js',
   './js/content/resources.js',
   './js/content/generators.js',
   './js/content/upgrades.js',
   './js/ui/render.js',
   './js/ui/panels.js',
+  './js/ui/resonance.js',
   './icons/icon.svg',
   './icons/icon-180.png',
   './icons/icon-192.png',
